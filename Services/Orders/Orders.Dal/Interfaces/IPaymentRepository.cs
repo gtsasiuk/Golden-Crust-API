@@ -1,12 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using Orders.Domain;
 
-namespace Orders.Dal.Interfaces
+namespace Orders.Dal.Interfaces;
+
+public interface IPaymentRepository : IGenericRepository<Payment>
 {
-    internal interface IPaymentRepository
-    {
-    }
+    Task<Payment?> GetActiveByOrderIdAsync(long orderId, CancellationToken ct = default);
+    Task PayAsync(long orderId, string? transactionRef = null, CancellationToken ct = default);   // usp_PayOrder
 }

@@ -1,12 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using Orders.Domain;
 
-namespace Orders.Dal.Interfaces
+namespace Orders.Dal.Interfaces;
+
+public interface IMenuItemRepository
 {
-    internal interface IMenuItemRepository
-    {
-    }
+    Task<MenuItem?> GetByIdAsync(long id, CancellationToken ct = default);
+    Task<IReadOnlyList<MenuItem>> GetAllAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<MenuItem>> GetByIdsAsync(IEnumerable<long> ids, CancellationToken ct = default);
 }

@@ -1,12 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using Microsoft.Extensions.DependencyInjection;
+using Orders.Dal.Interfaces;
 
-namespace Orders.Dal
+namespace Orders.Dal;
+
+public static class DalServiceCollectionExtensions
 {
-    internal class DependencyInjection
-    {
-    }
+    // Scoped: один UnitOfWork (і одне з'єднання) на HTTP-запит. DI сам викличе DisposeAsync в кінці запиту.
+    public static IServiceCollection AddOrdersDal(this IServiceCollection services, string connectionString)
+        => services.AddScoped<IUnitOfWork>(_ => new UnitOfWork(connectionString));
 }
