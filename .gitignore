@@ -1,0 +1,16 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+TestResults/
+
+# IDE
+.idea/
+.vscode/
+
+# Secrets / локальна конфігурація
+.env
+appsettings.Development.json
+*.local
