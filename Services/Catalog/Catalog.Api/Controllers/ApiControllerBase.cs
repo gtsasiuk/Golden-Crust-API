@@ -12,7 +12,6 @@ public abstract class ApiControllerBase : ControllerBase
     protected async Task<ActionResult?> ValidateAsync<T>(T input, CancellationToken ct)
     {
         var validator = HttpContext.RequestServices.GetService<IValidator<T>>();
-        if (validator is null) return null;
 
         var result = await validator.ValidateAsync(input, ct);
         return result.IsValid
