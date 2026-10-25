@@ -63,21 +63,21 @@ public record TagMenuItemDto
 }
 
 public record CreateCategoryDto(
-	[property: Required, StringLength(MenuCategory.NameMaxLength)] string Name,
+	[Required, StringLength(MenuCategory.NameMaxLength)] string Name,
 	int SortOrder = 0);
 
 public record UpdateCategoryDto(
-	[property: Required, StringLength(MenuCategory.NameMaxLength)] string Name,
+	[Required, StringLength(MenuCategory.NameMaxLength)] string Name,
 	int SortOrder = 0);
 
 public record CreateMenuItemDto(
 	long CategoryId,
-	[property: Required, StringLength(MenuItem.NameMaxLength)] string Name,
+	[Required, StringLength(MenuItem.NameMaxLength)] string Name,
 	decimal Price);
 
 public record UpdateMenuItemDto(
 	long CategoryId,
-	[property: Required, StringLength(MenuItem.NameMaxLength)] string Name,
+	[Required, StringLength(MenuItem.NameMaxLength)] string Name,
 	decimal Price);
 
 public record ChangePriceDto(decimal Price);
@@ -85,14 +85,14 @@ public record ChangePriceDto(decimal Price);
 public record SetAvailabilityDto(bool IsAvailable);
 
 public record UpdateDetailsDto(
-	[property: StringLength(MenuItemDetail.DescriptionMaxLength)] string? Description,
-	[property: StringLength(MenuItemDetail.IngredientsMaxLength)] string? Ingredients,
+	[StringLength(MenuItemDetail.DescriptionMaxLength)] string? Description,
+	[StringLength(MenuItemDetail.IngredientsMaxLength)] string? Ingredients,
 	int? WeightGrams,
 	int? Calories);
 
 public record AddImageDto(
-	[property: Required, StringLength(MenuItemImage.UrlMaxLength)] string Url,
-	[property: StringLength(MenuItemImage.AltTextMaxLength)] string? AltText);
+	[Required, StringLength(MenuItemImage.UrlMaxLength)] string Url,
+	[StringLength(MenuItemImage.AltTextMaxLength)] string? AltText);
 
 public record CreateTagDto(
-	[property: Required, StringLength(Tag.NameMaxLength)] string Name);
+	[Required, StringLength(Tag.NameMaxLength)] string Name);
