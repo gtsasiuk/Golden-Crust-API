@@ -1,9 +1,12 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
-// Існуюча БД з лаби 1 (контейнер golden-crust-sql). Рядок підключення береться з appsettings.json AppHost.
 var ordersDb = builder.AddConnectionString("OrdersDb");
+var catalogDb = builder.AddConnectionString("CatalogDb");
 
 builder.AddProject<Projects.Orders_Api>("orders-api")
-    .WithReference(ordersDb);   // Aspire підставить ConnectionStrings__OrdersDb, код API не змінюється
+    .WithReference(ordersDb);
+
+builder.AddProject<Projects.Catalog_Api>("catalog-api")
+    .WithReference(catalogDb);
 
 builder.Build().Run();
