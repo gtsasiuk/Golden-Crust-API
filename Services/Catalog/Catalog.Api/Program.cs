@@ -1,5 +1,7 @@
 using Catalog.Dal;
 using Catalog.Dal.Seeding;
+using Catalog.Bll;
+using Catalog.Bll.Mapping;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 
@@ -14,6 +16,12 @@ builder.Host.UseSerilog((ctx, cfg) => cfg
     .WriteTo.Console());
 
 builder.Services.AddCatalogDal(connectionString);
+builder.Services.AddCatalogBll();
+builder.Services.AddAutoMapper(cfg =>
+{
+    cfg.LicenseKey = builder.Configuration["AutoMapper:LicenseKey"];
+    cfg.AddProfile<CatalogProfile>();
+});
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -35,6 +43,9 @@ if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
+    using var mapScope = app.Services.CreateScope();
+    mapScope.ServiceProvider.GetRequiredService<AutoMapper.IMapper>()
+            .ConfigurationProvider.AssertConfigurationIsValid();
 }
 
 app.UseHttpsRedirection();

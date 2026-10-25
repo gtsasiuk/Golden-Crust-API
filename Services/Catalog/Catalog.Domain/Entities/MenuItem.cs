@@ -59,13 +59,17 @@ public class MenuItem : AuditableEntity
         return image;
     }
 
+    public void UnsetPrimaryImages()
+    {
+        foreach (var image in _images.Where(i => i.IsPrimary))
+            image.SetPrimary(false);
+    }
+
     public void SetPrimaryImage(long imageId)
     {
         var target = _images.FirstOrDefault(i => i.Id == imageId)
                      ?? throw new EntityNotFoundException(nameof(MenuItemImage), imageId);
-
-        foreach (var image in _images)
-            image.SetPrimary(image.Id == target.Id);
+        target.SetPrimary(true);
     }
 
     public void RemoveImage(long imageId)

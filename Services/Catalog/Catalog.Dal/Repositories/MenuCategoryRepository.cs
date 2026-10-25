@@ -24,4 +24,8 @@ public class MenuCategoryRepository(CatalogDbContext context)
 
     public Task<bool> HasItemsAsync(long categoryId, CancellationToken ct = default)
         => Context.MenuItems.AnyAsync(m => m.CategoryId == categoryId, ct);
+
+    public Task<bool> NameExistsAsync(string name, long? excludeId, CancellationToken ct = default)
+    => Set.IgnoreQueryFilters()
+          .AnyAsync(c => c.Name == name && (excludeId == null || c.Id != excludeId), ct);
 }
