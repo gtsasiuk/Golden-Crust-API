@@ -3,7 +3,7 @@ using Orders.Domain;
 
 namespace Orders.Api.Infrastructure;
 
-// Єдине місце, де винятки перетворюються на HTTP-статуси (аналог @ControllerAdvice).
+// Єдине місце, де винятки перетворюються на HTTP-статуси.
 public sealed class DomainExceptionHandler(
     IProblemDetailsService problemDetails,
     ILogger<DomainExceptionHandler> logger) : IExceptionHandler
