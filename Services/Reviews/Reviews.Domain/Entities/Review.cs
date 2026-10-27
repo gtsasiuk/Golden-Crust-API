@@ -12,10 +12,10 @@ public class Review : BaseEntity
     public const int MaxPhotos = 5;
 
     // вкладені масиви документа; назовні лише IReadOnlyCollection
-    private readonly List<string> _photos = new();
-    private readonly List<string> _pros = new();
-    private readonly List<string> _cons = new();
-    private readonly List<Comment> _comments = new();
+    private List<string> _photos = new();
+    private List<string> _pros = new();
+    private List<string> _cons = new();
+    private List<Comment> _comments = new();
 
     public long MenuItemId { get; private set; }               // посилання на Catalog (без FK)
     public string MenuItemName { get; private set; } = "";     // денормалізовано з Catalog
