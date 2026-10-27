@@ -14,7 +14,14 @@ public static class DependencyInjection
     {
         MongoMappings.Register();
 
-        services.Configure<MongoDbOptions>(config.GetSection(MongoDbOptions.SectionName));
+        services.Configure<MongoDbOptions>(o =>
+        {
+            config.GetSection(MongoDbOptions.SectionName).Bind(o);
+
+            var fromAspire = config.GetConnectionString("ReviewsDb");
+            if (!string.IsNullOrWhiteSpace(fromAspire))
+                o.ConnectionString = fromAspire;
+        });
         services.AddSingleton<MongoDbContext>();
 
         services.AddScoped<IReviewRepository, ReviewRepository>();

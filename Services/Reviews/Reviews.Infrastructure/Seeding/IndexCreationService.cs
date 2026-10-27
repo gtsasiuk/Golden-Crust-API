@@ -26,7 +26,7 @@ public class IndexCreationService(MongoDbContext context, ILogger<IndexCreationS
 
             new CreateIndexModel<Review>(
                 rk.Ascending(r => r.OrderId).Ascending(r => r.MenuItemId),
-                new CreateIndexOptions
+                new CreateIndexOptions<Review>
                 {
                     Name = "ux_reviews_order_menuItem",
                     Unique = true,
