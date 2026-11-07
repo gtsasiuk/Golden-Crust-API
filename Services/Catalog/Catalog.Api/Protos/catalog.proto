@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+option csharp_namespace = "Catalog.Contracts";
+package catalog;
+
+service CatalogService {
+  rpc GetMenuItem (GetMenuItemRequest) returns (MenuItemReply);
+  rpc GetMenuItemsByIds (GetMenuItemsByIdsRequest) returns (MenuItemsReply);
+}
+
+message GetMenuItemRequest { int64 id = 1; }
+message GetMenuItemsByIdsRequest { repeated int64 ids = 1; }
+
+message Money {
+  int64 units = 1;
+  int32 nanos = 2;
+}
+
+message MenuItemReply {
+  int64 id = 1;
+  string name = 2;
+  string category_name = 3;
+  Money price = 4;
+  bool is_available = 5;
+  optional string description = 6;
+  optional string primary_image_url = 7;
+  repeated string tags = 8;
+}
+
+message MenuItemsReply { repeated MenuItemReply items = 1; }
