@@ -1,4 +1,5 @@
 using Catalog.Api.Infrastructure;
+using Catalog.Api.GrpcServices;
 using Catalog.Bll;
 using Catalog.Bll.Mapping;
 using Catalog.Dal;
@@ -25,6 +26,9 @@ builder.Services.AddAutoMapper(cfg =>
 });
 
 builder.Services.AddControllers();
+builder.Services.AddGrpc(o => o.Interceptors.Add<LoggingInterceptor>());
+if (builder.Environment.IsDevelopment())
+    builder.Services.AddGrpcReflection();
 
 builder.Services.AddProblemDetails(o => o.CustomizeProblemDetails = ctx =>
     ctx.ProblemDetails.Extensions["traceId"] = ctx.HttpContext.TraceIdentifier);
@@ -58,5 +62,8 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.MapControllers();
+app.MapGrpcService<CatalogGrpcService>();
+if (app.Environment.IsDevelopment())
+    app.MapGrpcReflectionService();
 app.MapDefaultEndpoints();
 app.Run();
