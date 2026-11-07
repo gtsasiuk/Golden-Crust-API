@@ -12,10 +12,8 @@ builder.Services.AddReverseProxy()
 
 var app = builder.Build();
 
-// 1. CorrelationId: ДО MapReverseProxy, інакше заголовок не потрапить у проксований запит
 app.UseMiddleware<CorrelationIdMiddleware>();
 
-// 2. Лог маршрутизації: який маршрут і кластер обрано, куди проксовано, статус, тривалість
 app.Use(async (context, next) =>
 {
     var sw = System.Diagnostics.Stopwatch.StartNew();

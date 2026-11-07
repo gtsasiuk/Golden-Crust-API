@@ -1,15 +1,17 @@
 using System.Text.Json.Serialization;
-using Platform.Aggregator.Clients;
+using Catalog.Contracts;
+using Orders.Contracts;
 using Platform.Aggregator.Services;
 using Platform.ServiceDefaults;
+using Reviews.Contracts;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 
-builder.Services.AddHttpClient<OrdersClient>(c => c.BaseAddress = new("https+http://orders-api"));
-builder.Services.AddHttpClient<CatalogClient>(c => c.BaseAddress = new("https+http://catalog-api"));
-builder.Services.AddHttpClient<ReviewsClient>(c => c.BaseAddress = new("https+http://reviews-api"));
+builder.Services.AddGrpcClient<OrdersService.OrdersServiceClient>(o => o.Address = new Uri("https://orders-api"));
+builder.Services.AddGrpcClient<CatalogService.CatalogServiceClient>(o => o.Address = new Uri("https://catalog-api"));
+builder.Services.AddGrpcClient<ReviewsService.ReviewsServiceClient>(o => o.Address = new Uri("https://reviews-api"));
 
 builder.Services.AddScoped<OrderAggregationService>();
 
