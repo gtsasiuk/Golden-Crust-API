@@ -9,11 +9,13 @@ using Platform.ServiceDefaults;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
+builder.AddRedisDistributedCache("redis");
 
 var connectionString = builder.Configuration.GetConnectionString("CatalogDb")
     ?? throw new InvalidOperationException("Connection string 'CatalogDb' is missing");
 
 builder.Services.AddCatalogDal(connectionString);
+builder.Services.AddMemoryCache(o => o.SizeLimit = 10_000);
 builder.Services.AddCatalogBll();
 
 builder.Services.AddAutoMapper(cfg =>
