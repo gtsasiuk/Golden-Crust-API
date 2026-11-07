@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Options;
 using MongoDB.Driver;
 using Reviews.Domain.Entities;
+using MongoDB.Driver.Core.Extensions.DiagnosticSources;
 
 namespace Reviews.Infrastructure.Persistence;
 
@@ -16,7 +17,9 @@ public class MongoDbContext
             throw new InvalidOperationException(
                 "MongoDb:ConnectionString and MongoDb:DatabaseName must be configured");
 
-        var client = new MongoClient(o.ConnectionString);
+        var settings = MongoClientSettings.FromConnectionString(o.ConnectionString);
+        settings.ClusterConfigurator = cb => cb.Subscribe(new DiagnosticsActivityEventSubscriber());
+        var client = new MongoClient(settings);
         Database = client.GetDatabase(o.DatabaseName);
     }
 

@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using Microsoft.Extensions.Logging;
 using AutoMapper;
 using Catalog.Bll.Dto;
 using Catalog.Dal.Interfaces;
@@ -7,8 +9,9 @@ using Catalog.Domain.Exceptions;
 
 namespace Catalog.Bll.Services;
 
-public class MenuItemService(IUnitOfWork uow, IMapper mapper) : IMenuItemService
+public class MenuItemService(IUnitOfWork uow, IMapper mapper, ILogger<MenuItemService> logger) : IMenuItemService
 {
+    private static readonly ActivitySource Source = new("GoldenCrust.Catalog");
     private const int MaxPageSize = 100;
 
     public async Task<PagedResult<MenuItemListDto>> GetListAsync(MenuItemsQuery q, CancellationToken ct = default)
@@ -38,6 +41,7 @@ public class MenuItemService(IUnitOfWork uow, IMapper mapper) : IMenuItemService
         var item = new MenuItem(input.CategoryId, name, input.Price);
         await uow.MenuItems.AddAsync(item, ct);
         await uow.SaveChangesAsync(ct);
+        logger.LogInformation("Menu item {MenuItemId} created in category {CategoryId}, price {Price}", item.Id, item.CategoryId, item.Price);
         return await GetByIdAsync(item.Id, ct);
     }
 
@@ -60,10 +64,17 @@ public class MenuItemService(IUnitOfWork uow, IMapper mapper) : IMenuItemService
 
     public async Task<MenuItemDto> ChangePriceAsync(long id, ChangePriceDto input, CancellationToken ct = default)
     {
+        using var activity = Source.StartActivity("ChangePrice");
+        activity?.SetTag("menuitem.id", id);
+
         var item = await uow.MenuItems.GetByIdAsync(id, ct)
                    ?? throw new EntityNotFoundException(nameof(MenuItem), id);
+        var oldPrice = item.Price;
         item.ChangePrice(input.Price);
         await uow.SaveChangesAsync(ct);
+
+        logger.LogInformation("Menu item {MenuItemId} price changed from {OldPrice} to {NewPrice}",
+            id, oldPrice, input.Price);
         return await GetByIdAsync(id, ct);
     }
 
@@ -73,6 +84,7 @@ public class MenuItemService(IUnitOfWork uow, IMapper mapper) : IMenuItemService
                    ?? throw new EntityNotFoundException(nameof(MenuItem), id);
         item.SetAvailability(input.IsAvailable);
         await uow.SaveChangesAsync(ct);
+        logger.LogInformation("Menu item {MenuItemId} availability set to {IsAvailable}", id, input.IsAvailable);
         return await GetByIdAsync(id, ct);
     }
 

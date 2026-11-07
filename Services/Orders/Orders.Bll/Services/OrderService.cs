@@ -1,4 +1,5 @@
 ﻿using System.Data;
+using System.Diagnostics;
 using AutoMapper;
 using Microsoft.Extensions.Logging;
 using Orders.Bll.Dtos;
@@ -9,20 +10,20 @@ namespace Orders.Bll.Services;
 
 public class OrderService(IUnitOfWork uow, IMapper mapper, ILogger<OrderService> logger) : IOrderService
 {
+    private static readonly ActivitySource Source = new("GoldenCrust.Orders");
     // Статуси, які можна виставляти через /status (кухня й доставка).
     // Placed→Accepted робить checkout, Cancelled робить /cancel.
     private static readonly string[] KitchenStatuses =
         [OrderStatus.Cooking, OrderStatus.ReadyForDelivery, OrderStatus.Delivering, OrderStatus.Delivered];
 
-    // ---------- Транзакційна операція 1: створення замовлення ----------
-    // Orders + OrderDetails + OrderItems (ЗНІМОК назви/ціни) + Payment + історія: усе або нічого.
     public async Task<OrderDto> CreateAsync(CreateOrderDto dto, CancellationToken ct = default)
     {
-        // Бізнес-валідація, якій не потрібна БД
+        using var activity = Source.StartActivity("CreateOrder");
+        activity?.SetTag("customer.id", dto.CustomerId);
+
         if (dto.DeliveryLat.HasValue != dto.DeliveryLng.HasValue)
             throw new ValidationException("DeliveryLat and DeliveryLng must be provided together");
 
-        // Дублікати однієї страви в запиті складаємо (так само робила usp_CreateOrder)
         var requested = dto.Items
             .GroupBy(i => i.MenuItemId)
             .ToDictionary(g => g.Key, g => g.Sum(i => i.Quantity));
@@ -30,7 +31,6 @@ public class OrderService(IUnitOfWork uow, IMapper mapper, ILogger<OrderService>
         long orderId = 0;
         await InTransactionAsync(async () =>
         {
-            // Бізнес-валідація зі станом БД
             if (await uow.Customers.GetByIdAsync(dto.CustomerId, ct) is null)
                 throw new NotFoundException($"Customer {dto.CustomerId} not found");
 
@@ -39,7 +39,6 @@ public class OrderService(IUnitOfWork uow, IMapper mapper, ILogger<OrderService>
             if (bad.Count > 0)
                 throw new ValidationException($"Menu items unknown or unavailable: {string.Join(", ", bad)}");
 
-            // ЗНІМОК: назва й ціна копіюються з довідника і далі не змінюються
             var items = requested.Select(r => new OrderItem
             {
                 MenuItemId = r.Key,
@@ -66,8 +65,12 @@ public class OrderService(IUnitOfWork uow, IMapper mapper, ILogger<OrderService>
             await uow.Orders.AddHistoryAsync(new OrderStatusHistoryEntry { OrderId = orderId, ToStatus = OrderStatus.Placed }, ct);
         }, ct);
 
-        logger.LogInformation("Order {OrderId} created for customer {CustomerId}", orderId, dto.CustomerId);
-        return await GetByIdAsync(orderId, ct);
+        var created = await GetByIdAsync(orderId, ct);
+        activity?.SetTag("order.id", orderId);
+        logger.LogInformation(
+            "Order {OrderId} created for customer {CustomerId}: {ItemsCount} items, amount {Amount}, status {Status}",
+            orderId, dto.CustomerId, created.Items.Count, created.TotalAmount, created.Status);
+        return created;
     }
 
     public async Task<OrderDto> GetByIdAsync(long id, CancellationToken ct = default)
@@ -92,11 +95,11 @@ public class OrderService(IUnitOfWork uow, IMapper mapper, ILogger<OrderService>
         return mapper.Map<IReadOnlyList<OrderSummaryDto>>(rows);
     }
 
-    // ---------- Транзакційна операція 2: оплата + підтвердження ----------
-    // Payments (usp_PayOrder) і Orders (usp_ConfirmOrder): два репозиторії, одна транзакція.
-    // Допустимість переходу перевіряють самі процедури: недопустимий перехід → 409.
     public async Task CheckoutAsync(long orderId, bool simulateFailure = false, CancellationToken ct = default)
     {
+        using var activity = Source.StartActivity("ConfirmOrder");
+        activity?.SetTag("order.id", orderId);
+
         await InTransactionAsync(async () =>
         {
             var order = await uow.Orders.GetWithItemsAsync(orderId, ct)
@@ -104,15 +107,15 @@ public class OrderService(IUnitOfWork uow, IMapper mapper, ILogger<OrderService>
             if (order.Items.Count == 0)
                 throw new BusinessConflictException($"Order {orderId} has no items");
 
-            await uow.Payments.PayAsync(orderId, null, ct);      // Pending → Paid
+            await uow.Payments.PayAsync(orderId, null, ct);
 
-            if (simulateFailure)                                 // демо відкату: платіж уже "Paid", але далі помилка
+            if (simulateFailure)
                 throw new BusinessConflictException("Simulated failure after payment: the transaction is rolled back");
 
-            await uow.Orders.ConfirmAsync(orderId, ct);          // Placed → Accepted
+            await uow.Orders.ConfirmAsync(orderId, ct);
         }, ct);
 
-        logger.LogInformation("Order {OrderId} paid and confirmed", orderId);
+        logger.LogInformation("Order {OrderId} paid and confirmed, status {Status}", orderId, OrderStatus.Accepted);
     }
 
     public async Task ChangeStatusAsync(long orderId, ChangeOrderStatusDto dto, CancellationToken ct = default)

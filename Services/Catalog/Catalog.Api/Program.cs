@@ -4,21 +4,14 @@ using Catalog.Bll.Mapping;
 using Catalog.Dal;
 using Catalog.Dal.Seeding;
 using Microsoft.EntityFrameworkCore;
-using Serilog;
-using Serilog.Context;
-using Serilog.Formatting.Compact;
+using Platform.ServiceDefaults;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.AddServiceDefaults();
+
 var connectionString = builder.Configuration.GetConnectionString("CatalogDb")
     ?? throw new InvalidOperationException("Connection string 'CatalogDb' is missing");
-
-builder.Host.UseSerilog((ctx, cfg) => cfg
-    .ReadFrom.Configuration(ctx.Configuration)
-    .Enrich.FromLogContext()
-    .Enrich.WithProperty("Service", "catalog-api")
-    .WriteTo.Console()
-    .WriteTo.File(new CompactJsonFormatter(), "logs/catalog-.json", rollingInterval: RollingInterval.Day));
 
 builder.Services.AddCatalogDal(connectionString);
 builder.Services.AddCatalogBll();
@@ -40,16 +33,7 @@ builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-app.Use(async (ctx, next) =>
-{
-    var correlationId = ctx.Request.Headers["X-Correlation-Id"].FirstOrDefault() ?? ctx.TraceIdentifier;
-    ctx.Response.Headers["X-Correlation-Id"] = correlationId;
-    using (LogContext.PushProperty("CorrelationId", correlationId))
-        await next();
-});
-
-app.UseSerilogRequestLogging(o => o.EnrichDiagnosticContext = (diag, http) =>
-    diag.Set("UserId", http.User.Identity?.Name ?? "anonymous"));
+app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 
@@ -72,4 +56,5 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.MapControllers();
+app.MapDefaultEndpoints();
 app.Run();
