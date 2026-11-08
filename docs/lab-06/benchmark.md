@@ -9,7 +9,7 @@
 |---|---|---|---|---|
 | HTTP (лаба 5), без кешу | 22,1 ms | 17,4 ms | 33,0 ms | 1 + N (Catalog) + N (Reviews) |
 | gRPC, без кешу Aggregator | 16,7 ms | 14,9 ms | 21,8 ms | 3 (Orders, Catalog batch, Reviews batch) |
-| gRPC + Redis-кеш Aggregator | _заповнити після кроку 6_ | | | 0 при попаданні в кеш |
+| gRPC + Redis-кеш Aggregator | 3,6 ms | 2,9 ms | 4,7 ms | 0 при попаданні в кеш |
 
 Для замовлення №1 (2 позиції): HTTP робив 1 + 2 + 2 = 5 викликів, gRPC робить 3.
 Середній час зменшився приблизно на 24 % (22,1 -> 16,7 ms), максимум на 34 %.
@@ -18,4 +18,4 @@
 
 - HTTP: `baseline-http-traces.jpg`
 - gRPC: `grpc-traces.jpg` (trace з gRPC-spans клієнта й сервера)
-- Метрики кешу: `cache-metrics.png`
+- Повторний запит без SQL-span: `cache-hit-no-sql-trace.jpg`

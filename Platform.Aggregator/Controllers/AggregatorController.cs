@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Platform.Aggregator.Caching;
 using Platform.Aggregator.Models;
 using Platform.Aggregator.Services;
 
@@ -6,7 +7,7 @@ namespace Platform.Aggregator.Controllers;
 
 [ApiController]
 [Route("api/aggregator")]
-public class AggregatorController(OrderAggregationService service, ILogger<AggregatorController> logger) : ControllerBase
+public class AggregatorController(CachedOrderAggregationService service, ILogger<AggregatorController> logger) : ControllerBase
 {
     [HttpGet("orders/{id:long}/full")]
     [ProducesResponseType<FullOrderDto>(StatusCodes.Status200OK)]
