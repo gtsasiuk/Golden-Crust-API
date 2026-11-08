@@ -1,6 +1,7 @@
 using AutoMapper;
 using MediatR;
 using MongoDB.Bson;
+using Reviews.Application.Caching;
 using Reviews.Application.Reviews.Dtos;
 using Reviews.Domain.Entities;
 using Reviews.Domain.Exceptions;
@@ -9,7 +10,7 @@ using Reviews.Domain.ValueObjects;
 
 namespace Reviews.Application.Reviews.Commands.AddComment;
 
-public class AddCommentCommandHandler(IReviewRepository reviews, IMapper mapper)
+public class AddCommentCommandHandler(IReviewRepository reviews, IMapper mapper, ICacheService cache)
     : IRequestHandler<AddCommentCommand, ReviewDto>
 {
     public async Task<ReviewDto> Handle(AddCommentCommand cmd, CancellationToken ct)
@@ -19,6 +20,7 @@ public class AddCommentCommandHandler(IReviewRepository reviews, IMapper mapper)
 
         review.AddComment(new Author(cmd.CustomerId, cmd.AuthorName), cmd.Text);
         await reviews.UpdateAsync(review, ct);
+        await cache.RemoveAsync(CacheKeys.ListVersion, "CommentAdded", ct);
 
         return mapper.Map<ReviewDto>(review);
     }
