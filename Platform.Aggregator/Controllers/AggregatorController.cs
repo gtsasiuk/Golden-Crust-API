@@ -28,4 +28,10 @@ public class AggregatorController(CachedOrderAggregationService service, ILogger
                            detail: "The order cannot be assembled without orders-api. Try again later.");
         }
     }
+
+    [HttpGet("status")]
+    [ProducesResponseType<IReadOnlyList<DownstreamStatus>>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<DownstreamStatus>>> GetStatus(
+    [FromServices] DownstreamStatusService status, CancellationToken ct)
+    => Ok(await status.CheckAllAsync(ct));
 }
