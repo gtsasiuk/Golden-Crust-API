@@ -1,4 +1,5 @@
 using AutoMapper;
+using Catalog.Bll.Caching;
 using Catalog.Bll.Dto;
 using Catalog.Dal.Interfaces;
 using Catalog.Domain.Entities;
@@ -6,10 +7,15 @@ using Catalog.Domain.Exceptions;
 
 namespace Catalog.Bll.Services;
 
-public class CategoryService(IUnitOfWork uow, IMapper mapper) : ICategoryService
+public class CategoryService(IUnitOfWork uow, IMapper mapper, ICacheService cache) : ICategoryService
 {
     public async Task<IReadOnlyList<CategoryDto>> GetAllAsync(CancellationToken ct = default)
-        => mapper.Map<List<CategoryDto>>(await uow.Categories.GetOrderedAsync(ct));
+    {
+        var categories = await cache.GetOrCreateAsync(CacheKeys.Categories, async () =>
+            mapper.Map<List<CategoryDto>>(await uow.Categories.GetOrderedAsync(ct)),
+            CachePolicy.Categories, ct);
+        return categories!;
+    }
 
     public async Task<CategoryWithItemsDto> GetByIdAsync(long id, CancellationToken ct = default)
     {
@@ -27,6 +33,7 @@ public class CategoryService(IUnitOfWork uow, IMapper mapper) : ICategoryService
         var category = new MenuCategory(name, input.SortOrder);
         await uow.Categories.AddAsync(category, ct);
         await uow.SaveChangesAsync(ct);
+        await cache.RemoveAsync(CacheKeys.Categories, "CategoryCreated", ct);
         return mapper.Map<CategoryDto>(category);
     }
 
@@ -39,9 +46,18 @@ public class CategoryService(IUnitOfWork uow, IMapper mapper) : ICategoryService
         if (await uow.Categories.NameExistsAsync(name, id, ct))
             throw new ConflictException($"Category '{name}' already exists");
 
+        var nameChanged = category.Name != name;
+
         category.Rename(name);
         category.ChangeSortOrder(input.SortOrder);
         await uow.SaveChangesAsync(ct);
+
+        await cache.RemoveAsync(CacheKeys.Categories, "CategoryUpdated", ct);
+
+        if (nameChanged)
+            foreach (var itemId in await uow.Categories.GetItemIdsAsync(id, ct))
+                await cache.RemoveAsync(CacheKeys.MenuItem(itemId), "CategoryRenamed", ct);
+
         return mapper.Map<CategoryDto>(category);
     }
 
@@ -55,5 +71,6 @@ public class CategoryService(IUnitOfWork uow, IMapper mapper) : ICategoryService
 
         category.SoftDelete();
         await uow.SaveChangesAsync(ct);
+        await cache.RemoveAsync(CacheKeys.Categories, "CategoryDeleted", ct);
     }
 }

@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using AutoMapper;
+using Catalog.Bll.Caching;
 using Catalog.Bll.Dto;
 using Catalog.Dal.Interfaces;
 using Catalog.Dal.Specifications;
@@ -9,7 +10,7 @@ using Catalog.Domain.Exceptions;
 
 namespace Catalog.Bll.Services;
 
-public class MenuItemService(IUnitOfWork uow, IMapper mapper, ILogger<MenuItemService> logger) : IMenuItemService
+public class MenuItemService(IUnitOfWork uow, IMapper mapper, ICacheService cache, ILogger<MenuItemService> logger) : IMenuItemService
 {
     private static readonly ActivitySource Source = new("GoldenCrust.Catalog");
     private const int MaxPageSize = 100;
@@ -28,7 +29,12 @@ public class MenuItemService(IUnitOfWork uow, IMapper mapper, ILogger<MenuItemSe
     }
 
     public async Task<MenuItemDto> GetByIdAsync(long id, CancellationToken ct = default)
-        => mapper.Map<MenuItemDto>(await LoadAsync(id, ct));
+        => await cache.GetOrCreateAsync(CacheKeys.MenuItem(id), async () =>
+        {
+            var item = await LoadAsync(id, ct);
+            return mapper.Map<MenuItemDto>(item);
+        }, CachePolicy.MenuItemCard, ct)
+           ?? throw new EntityNotFoundException(nameof(MenuItem), id);
 
     public async Task<MenuItemDto> CreateAsync(CreateMenuItemDto input, CancellationToken ct = default)
     {
@@ -42,7 +48,7 @@ public class MenuItemService(IUnitOfWork uow, IMapper mapper, ILogger<MenuItemSe
         await uow.MenuItems.AddAsync(item, ct);
         await uow.SaveChangesAsync(ct);
         logger.LogInformation("Menu item {MenuItemId} created in category {CategoryId}, price {Price}", item.Id, item.CategoryId, item.Price);
-        return await GetByIdAsync(item.Id, ct);
+        return await GetByIdAsync(item.Id, ct);   // нова страва: у кеші її ще немає, інвалідувати нічого
     }
 
     public async Task<MenuItemDto> UpdateAsync(long id, UpdateMenuItemDto input, CancellationToken ct = default)
@@ -59,6 +65,7 @@ public class MenuItemService(IUnitOfWork uow, IMapper mapper, ILogger<MenuItemSe
         item.MoveToCategory(input.CategoryId);
         item.ChangePrice(input.Price);
         await uow.SaveChangesAsync(ct);
+        await InvalidateCardAsync(id, "MenuItemUpdated", ct);
         return await GetByIdAsync(id, ct);
     }
 
@@ -72,6 +79,7 @@ public class MenuItemService(IUnitOfWork uow, IMapper mapper, ILogger<MenuItemSe
         var oldPrice = item.Price;
         item.ChangePrice(input.Price);
         await uow.SaveChangesAsync(ct);
+        await InvalidateCardAsync(id, "PriceChanged", ct);
 
         logger.LogInformation("Menu item {MenuItemId} price changed from {OldPrice} to {NewPrice}",
             id, oldPrice, input.Price);
@@ -84,6 +92,7 @@ public class MenuItemService(IUnitOfWork uow, IMapper mapper, ILogger<MenuItemSe
                    ?? throw new EntityNotFoundException(nameof(MenuItem), id);
         item.SetAvailability(input.IsAvailable);
         await uow.SaveChangesAsync(ct);
+        await InvalidateCardAsync(id, "AvailabilityChanged", ct);
         logger.LogInformation("Menu item {MenuItemId} availability set to {IsAvailable}", id, input.IsAvailable);
         return await GetByIdAsync(id, ct);
     }
@@ -94,6 +103,7 @@ public class MenuItemService(IUnitOfWork uow, IMapper mapper, ILogger<MenuItemSe
                    ?? throw new EntityNotFoundException(nameof(MenuItem), id);
         item.SoftDelete();
         await uow.SaveChangesAsync(ct);
+        await InvalidateCardAsync(id, "MenuItemDeleted", ct);
     }
 
     public async Task<MenuItemDto> SetDetailsAsync(long id, UpdateDetailsDto input, CancellationToken ct = default)
@@ -101,6 +111,7 @@ public class MenuItemService(IUnitOfWork uow, IMapper mapper, ILogger<MenuItemSe
         var item = await LoadAsync(id, ct);
         item.SetDetail(input.Description, input.Ingredients, input.WeightGrams, input.Calories);
         await uow.SaveChangesAsync(ct);
+        await InvalidateCardAsync(id, "DetailsChanged", ct);
         return mapper.Map<MenuItemDto>(item);
     }
 
@@ -109,6 +120,7 @@ public class MenuItemService(IUnitOfWork uow, IMapper mapper, ILogger<MenuItemSe
         var item = await LoadAsync(id, ct);
         var image = item.AddImage(input.Url, input.AltText);
         await uow.SaveChangesAsync(ct);
+        await InvalidateCardAsync(id, "ImageAdded", ct);
         return mapper.Map<ImageDto>(image);
     }
 
@@ -126,6 +138,8 @@ public class MenuItemService(IUnitOfWork uow, IMapper mapper, ILogger<MenuItemSe
             item.SetPrimaryImage(imageId);
             await uow.SaveChangesAsync(ct);
         }, ct);
+
+        await InvalidateCardAsync(id, "PrimaryImageChanged", ct);
     }
 
     public async Task RemoveImageAsync(long id, long imageId, CancellationToken ct = default)
@@ -133,6 +147,7 @@ public class MenuItemService(IUnitOfWork uow, IMapper mapper, ILogger<MenuItemSe
         var item = await LoadAsync(id, ct);
         item.RemoveImage(imageId);
         await uow.SaveChangesAsync(ct);
+        await InvalidateCardAsync(id, "ImageRemoved", ct);
     }
 
     public async Task<MenuItemDto> AddTagAsync(long id, long tagId, CancellationToken ct = default)
@@ -143,6 +158,7 @@ public class MenuItemService(IUnitOfWork uow, IMapper mapper, ILogger<MenuItemSe
 
         item.AddTag(tagId);
         await uow.SaveChangesAsync(ct);
+        await InvalidateCardAsync(id, "TagAdded", ct);
         return await GetByIdAsync(id, ct);
     }
 
@@ -151,11 +167,15 @@ public class MenuItemService(IUnitOfWork uow, IMapper mapper, ILogger<MenuItemSe
         var item = await LoadAsync(id, ct);
         item.RemoveTag(tagId);
         await uow.SaveChangesAsync(ct);
+        await InvalidateCardAsync(id, "TagRemoved", ct);
     }
 
     private async Task<MenuItem> LoadAsync(long id, CancellationToken ct)
         => await uow.MenuItems.GetWithDetailsAsync(id, ct)
            ?? throw new EntityNotFoundException(nameof(MenuItem), id);
+
+    private Task InvalidateCardAsync(long id, string reason, CancellationToken ct)
+        => cache.RemoveAsync(CacheKeys.MenuItem(id), reason, ct);
 
     private async Task EnsureCategoryExistsAsync(long categoryId, CancellationToken ct)
     {

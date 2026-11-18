@@ -4,12 +4,15 @@ using Reviews.Application;
 using Reviews.Application.Reviews.Mappings;
 using Reviews.Infrastructure;
 using Reviews.WebApi.ErrorHandling;
+using Reviews.WebApi.GrpcServices;
 using Reviews.WebApi.Mapping;
 using Platform.ServiceDefaults;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
+builder.AddRedisDistributedCache("redis");
+builder.Services.AddMemoryCache(o => o.SizeLimit = 10_000);
 
 builder.Services
     .AddApplication(builder.Configuration)
@@ -25,6 +28,9 @@ builder.Services.AddAutoMapper(cfg =>
 builder.Services.AddControllers()
     .AddJsonOptions(o => o.JsonSerializerOptions.Converters.Add(
         new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)));
+builder.Services.AddGrpc(o => o.Interceptors.Add<LoggingInterceptor>());
+if (builder.Environment.IsDevelopment())
+    builder.Services.AddGrpcReflection();
 
 builder.Services.AddProblemDetails(o => o.CustomizeProblemDetails = ctx =>
     ctx.ProblemDetails.Extensions["traceId"] = ctx.HttpContext.TraceIdentifier);
@@ -50,5 +56,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.MapControllers();
+app.MapGrpcService<ReviewsGrpcService>();
+if (app.Environment.IsDevelopment())
+    app.MapGrpcReflectionService();
 app.MapDefaultEndpoints();
 app.Run();

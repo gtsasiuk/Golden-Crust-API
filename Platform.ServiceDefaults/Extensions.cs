@@ -73,7 +73,8 @@ public static class Extensions
             .WithMetrics(m => m
                 .AddAspNetCoreInstrumentation()
                 .AddHttpClientInstrumentation()
-                .AddRuntimeInstrumentation())
+                .AddRuntimeInstrumentation()
+                .AddMeter("GoldenCrust.Cache"))
             .WithTracing(t => t
                 .AddSource(builder.Environment.ApplicationName)
                 .AddSource("GoldenCrust.*")

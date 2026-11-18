@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+
+option csharp_namespace = "Reviews.Contracts";
+package reviews;
+
+service ReviewsService {
+  rpc GetLatestForMenuItems (GetLatestForMenuItemsRequest) returns (LatestReviewsReply);
+}
+
+message GetLatestForMenuItemsRequest {
+  repeated int64 menu_item_ids = 1;
+  int32 count = 2;
+}
+
+message ReviewReply {
+  string id = 1;
+  int64 menu_item_id = 2;
+  string author_name = 3;
+  string type = 4;
+  int32 rating = 5;
+  optional string text = 6;
+  google.protobuf.Timestamp created_at = 7;
+}
+
+message MenuItemReviews {
+  int64 menu_item_id = 1;
+  int64 total_count = 2;
+  repeated ReviewReply latest = 3;
+}
+
+message LatestReviewsReply { repeated MenuItemReviews items = 1; }

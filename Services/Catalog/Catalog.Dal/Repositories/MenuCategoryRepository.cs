@@ -28,4 +28,10 @@ public class MenuCategoryRepository(CatalogDbContext context)
     public Task<bool> NameExistsAsync(string name, long? excludeId, CancellationToken ct = default)
     => Set.IgnoreQueryFilters()
           .AnyAsync(c => c.Name == name && (excludeId == null || c.Id != excludeId), ct);
+
+    public async Task<IReadOnlyList<long>> GetItemIdsAsync(long categoryId, CancellationToken ct = default)
+        => await Context.MenuItems.AsNoTracking()
+            .Where(m => m.CategoryId == categoryId)
+            .Select(m => m.Id)
+            .ToListAsync(ct);
 }
