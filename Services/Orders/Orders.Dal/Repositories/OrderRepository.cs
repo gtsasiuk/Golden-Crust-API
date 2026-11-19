@@ -96,4 +96,25 @@ ORDER BY i.MenuItemId";
 
     public Task CancelAsync(long orderId, string? reason = null, CancellationToken ct = default) =>
         CallProcedureAsync("dbo.usp_CancelOrder", new { OrderId = orderId, Reason = reason, ChangedBy = Actor }, ct);
+
+    public Task<IReadOnlyDictionary<string, int>> CountActiveByStatusAsync(CancellationToken ct = default) =>
+    RunAsync<IReadOnlyDictionary<string, int>>(async () =>
+    {
+        // Предикат дослівно збігається з фільтром IX_Orders_Status_OrderDate_Active:
+        // оптимізатор може порахувати активні замовлення лише по цьому вузькому індексу.
+        const string sql = @"SELECT Status, COUNT(*) AS Total
+                             FROM dbo.Orders
+                             WHERE IsDeleted = 0 AND Status <> 'Delivered' AND Status <> 'Cancelled'
+                             GROUP BY Status";
+        await EnsureOpenAsync(ct);
+        var rows = await Connection.QueryAsync<StatusCount>(
+            new CommandDefinition(sql, transaction: Transaction, cancellationToken: ct));
+        return rows.ToDictionary(r => r.Status, r => r.Total);
+    });
+
+    private sealed class StatusCount
+    {
+        public string Status { get; set; } = "";
+        public int Total { get; set; }
+    }
 }

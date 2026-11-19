@@ -4,6 +4,8 @@ using Orders.Bll.Mapping;
 using Orders.Bll.Services;
 using Orders.Dal;
 using Orders.Dal.Interfaces;
+using Orders.Api.Metrics;
+using Orders.Bll.Metrics;
 using Platform.ServiceDefaults;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -32,6 +34,10 @@ if (builder.Environment.IsDevelopment())
 builder.Services.AddProblemDetails(o => o.CustomizeProblemDetails = ctx =>
     ctx.ProblemDetails.Extensions["traceId"] = ctx.HttpContext.TraceIdentifier);
 builder.Services.AddExceptionHandler<DomainExceptionHandler>();
+
+builder.Services.AddSingleton<OrdersSnapshot>();
+builder.Services.AddSingleton<IOrderMetrics, OrderMetrics>();
+builder.Services.AddHostedService<OrdersSnapshotRefresher>();
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();

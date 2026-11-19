@@ -2,10 +2,12 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Reviews.Application;
 using Reviews.Application.Reviews.Mappings;
+using Reviews.Application.Metrics;
 using Reviews.Infrastructure;
 using Reviews.WebApi.ErrorHandling;
 using Reviews.WebApi.GrpcServices;
 using Reviews.WebApi.Mapping;
+using Reviews.WebApi.Metrics;
 using Platform.ServiceDefaults;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -17,6 +19,10 @@ builder.Services.AddMemoryCache(o => o.SizeLimit = 10_000);
 builder.Services
     .AddApplication(builder.Configuration)
     .AddInfrastructure(builder.Configuration);
+
+builder.Services.AddSingleton<ReviewsSnapshot>();
+builder.Services.AddSingleton<IReviewMetrics, ReviewMetrics>();
+builder.Services.AddHostedService<ReviewsSnapshotRefresher>();
 
 builder.Services.AddAutoMapper(cfg =>
 {

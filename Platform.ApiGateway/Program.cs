@@ -20,7 +20,13 @@ app.Use(async (context, next) =>
     await next();
     sw.Stop();
 
-    var proxy = context.GetReverseProxyFeature();
+    var proxy = context.Features.Get<IReverseProxyFeature>();
+    if (proxy is null)
+    {
+        app.Logger.LogDebug("{Method} {Path} handled by the gateway itself: {StatusCode} in {Elapsed} ms",
+            context.Request.Method, context.Request.Path, context.Response.StatusCode, sw.ElapsedMilliseconds);
+        return;
+    }
     var route = proxy?.Route.Config.RouteId;
     var cluster = proxy?.Cluster.Config.ClusterId;
     var destination = proxy?.ProxiedDestination?.Model.Config.Address;

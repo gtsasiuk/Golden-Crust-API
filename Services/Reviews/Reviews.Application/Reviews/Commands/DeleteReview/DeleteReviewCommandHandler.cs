@@ -4,10 +4,11 @@ using Reviews.Application.Caching;
 using Reviews.Domain.Entities;
 using Reviews.Domain.Exceptions;
 using Reviews.Domain.Interfaces;
+using Reviews.Application.Metrics;
 
 namespace Reviews.Application.Reviews.Commands.DeleteReview;
 
-public class DeleteReviewCommandHandler(IReviewRepository reviews, ICacheService cache)
+public class DeleteReviewCommandHandler(IReviewRepository reviews, ICacheService cache, IReviewMetrics metrics)
     : IRequestHandler<DeleteReviewCommand>
 {
     public async Task Handle(DeleteReviewCommand cmd, CancellationToken ct)
@@ -17,5 +18,7 @@ public class DeleteReviewCommandHandler(IReviewRepository reviews, ICacheService
             throw new NotFoundException(nameof(Review), cmd.Id);
 
         await cache.RemoveAsync(CacheKeys.ListVersion, "ReviewDeleted", ct);
+
+        metrics.ReviewDeleted();
     }
 }

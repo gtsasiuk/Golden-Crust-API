@@ -4,6 +4,8 @@ using Catalog.Bll;
 using Catalog.Bll.Mapping;
 using Catalog.Dal;
 using Catalog.Dal.Seeding;
+using Catalog.Api.Metrics;
+using Catalog.Bll.Metrics;
 using Microsoft.EntityFrameworkCore;
 using Platform.ServiceDefaults;
 
@@ -18,6 +20,10 @@ var connectionString = builder.Configuration.GetConnectionString("CatalogDb")
 builder.Services.AddCatalogDal(connectionString);
 builder.Services.AddMemoryCache(o => o.SizeLimit = 10_000);
 builder.Services.AddCatalogBll();
+
+builder.Services.AddSingleton<CatalogSnapshot>();
+builder.Services.AddSingleton<ICatalogMetrics, CatalogMetrics>();
+builder.Services.AddHostedService<CatalogSnapshotRefresher>();
 
 builder.Services.AddAutoMapper(cfg =>
 {

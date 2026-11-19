@@ -13,4 +13,5 @@ public interface IOrderRepository : IGenericRepository<Order>
     Task ConfirmAsync(long orderId, CancellationToken ct = default);                                     // usp_ConfirmOrder
     Task ChangeStatusAsync(long orderId, string newStatus, string? note = null, CancellationToken ct = default); // usp_ChangeStatus
     Task CancelAsync(long orderId, string? reason = null, CancellationToken ct = default);               // usp_CancelOrder
+    Task<IReadOnlyDictionary<string, int>> CountActiveByStatusAsync(CancellationToken ct = default);   // для gauge orders.active
 }

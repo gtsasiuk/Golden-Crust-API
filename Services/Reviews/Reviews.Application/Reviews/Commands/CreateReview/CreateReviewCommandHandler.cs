@@ -5,11 +5,12 @@ using Reviews.Application.Caching;
 using Reviews.Domain.Entities;
 using Reviews.Domain.Interfaces;
 using Reviews.Domain.ValueObjects;
+using Reviews.Application.Metrics;
 
 namespace Reviews.Application.Reviews.Commands.CreateReview;
 
 public class CreateReviewCommandHandler(
-    IReviewRepository reviews, ICacheService cache, ILogger<CreateReviewCommandHandler> logger)
+    IReviewRepository reviews, ICacheService cache, ILogger<CreateReviewCommandHandler> logger, IReviewMetrics metrics)
     : IRequestHandler<CreateReviewCommand, string>
 {
     private static readonly ActivitySource Source = new("GoldenCrust.Reviews");
@@ -27,6 +28,8 @@ public class CreateReviewCommandHandler(
 
         await reviews.AddAsync(review, ct);
         await cache.RemoveAsync(CacheKeys.ListVersion, "ReviewCreated", ct);
+
+        metrics.ReviewCreated(cmd.Type.ToString().ToLowerInvariant());
 
         activity?.SetTag("review.id", review.Id.ToString());
         logger.LogInformation(
