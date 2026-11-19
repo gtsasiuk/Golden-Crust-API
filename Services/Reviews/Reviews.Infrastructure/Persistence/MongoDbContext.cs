@@ -1,3 +1,4 @@
+
 using Microsoft.Extensions.Options;
 using MongoDB.Driver;
 using Reviews.Domain.Entities;
@@ -13,21 +14,33 @@ public class MongoDbContext
     public MongoDbContext(IOptions<MongoDbOptions> options)
     {
         var o = options.Value;
-        if (string.IsNullOrWhiteSpace(o.ConnectionString) || string.IsNullOrWhiteSpace(o.DatabaseName))
+
+        if (string.IsNullOrWhiteSpace(o.ConnectionString) ||
+            string.IsNullOrWhiteSpace(o.DatabaseName))
+        {
             throw new InvalidOperationException(
                 "MongoDb:ConnectionString and MongoDb:DatabaseName must be configured");
+        }
 
         var settings = MongoClientSettings.FromConnectionString(o.ConnectionString);
-        settings.ClusterConfigurator = cb => cb.Subscribe(new DiagnosticsActivityEventSubscriber());
-        var client = new MongoClient(settings);
-        Database = client.GetDatabase(o.DatabaseName);
+
+        settings.ClusterConfigurator = cb =>
+            cb.Subscribe(new DiagnosticsActivityEventSubscriber());
+
+        Client = new MongoClient(settings);
+        Database = Client.GetDatabase(o.DatabaseName);
     }
+
+    public IMongoClient Client { get; }
 
     public IMongoDatabase Database { get; }
 
-    public IMongoCollection<Review> Reviews => Database.GetCollection<Review>(ReviewsCollection);
-    public IMongoCollection<Discussion> Discussions => Database.GetCollection<Discussion>(DiscussionsCollection);
+    public IMongoCollection<Review> Reviews =>
+        Database.GetCollection<Review>(ReviewsCollection);
 
-    internal IMongoCollection<ReviewReadModel> ReviewReadModels
-        => Database.GetCollection<ReviewReadModel>(ReviewsCollection);
+    public IMongoCollection<Discussion> Discussions =>
+        Database.GetCollection<Discussion>(DiscussionsCollection);
+
+    internal IMongoCollection<ReviewReadModel> ReviewReadModels =>
+        Database.GetCollection<ReviewReadModel>(ReviewsCollection);
 }

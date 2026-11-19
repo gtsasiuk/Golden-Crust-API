@@ -7,6 +7,7 @@ using Orders.Dal.Interfaces;
 using Orders.Api.Metrics;
 using Orders.Bll.Metrics;
 using Platform.ServiceDefaults;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,6 +15,14 @@ builder.AddServiceDefaults();
 
 var connectionString = builder.Configuration.GetConnectionString("OrdersDb")
     ?? throw new InvalidOperationException("Connection string 'OrdersDb' is missing");
+
+builder.Services.AddHealthChecks()
+    .AddSqlServer(
+        connectionString: connectionString,
+        name: "orders-db",
+        failureStatus: HealthStatus.Unhealthy,
+        tags: ["database", "sql", "ready"],
+        timeout: TimeSpan.FromSeconds(5));
 
 builder.Services.AddScoped<IUnitOfWork>(_ => new UnitOfWork(connectionString));
 builder.Services.AddScoped<ICustomerService, CustomerService>();

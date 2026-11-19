@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Catalog.Contracts;
 using Orders.Contracts;
 using Platform.Aggregator.Caching;
@@ -11,6 +12,19 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 builder.AddRedisDistributedCache("redis");
+
+var redisConnectionString =
+    builder.Configuration.GetConnectionString("redis")
+    ?? throw new InvalidOperationException(
+        "Redis connection string is missing");
+
+builder.Services.AddHealthChecks()
+    .AddRedis(
+        redisConnectionString: redisConnectionString,
+        name: "redis-cache",
+        failureStatus: HealthStatus.Degraded,
+        tags: ["cache", "redis", "ready"],
+        timeout: TimeSpan.FromSeconds(3));
 
 builder.Services.AddGrpcClient<OrdersService.OrdersServiceClient>(o => o.Address = new Uri(ResilienceProfiles.Orders.Address))
     .ConfigureChannel(c => c.ServiceConfig = ResilienceProfiles.Orders.ToServiceConfig())

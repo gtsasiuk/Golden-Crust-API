@@ -8,14 +8,37 @@ using Catalog.Api.Metrics;
 using Catalog.Bll.Metrics;
 using Microsoft.EntityFrameworkCore;
 using Platform.ServiceDefaults;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 builder.AddRedisDistributedCache("redis");
 
+var redisConnectionString =
+    builder.Configuration.GetConnectionString("redis")
+    ?? throw new InvalidOperationException(
+        "Redis connection string is missing");
+
+builder.Services.AddHealthChecks()
+    .AddRedis(
+        redisConnectionString: redisConnectionString,
+        name: "redis-cache",
+        failureStatus: HealthStatus.Degraded,
+        tags: ["cache", "redis", "ready"],
+        timeout: TimeSpan.FromSeconds(3));
+
+
 var connectionString = builder.Configuration.GetConnectionString("CatalogDb")
     ?? throw new InvalidOperationException("Connection string 'CatalogDb' is missing");
+
+builder.Services.AddHealthChecks()
+    .AddSqlServer(
+        connectionString: connectionString,
+        name: "catalog-db",
+        failureStatus: HealthStatus.Unhealthy,
+        tags: ["database", "sql", "ready"],
+        timeout: TimeSpan.FromSeconds(5));
 
 builder.Services.AddCatalogDal(connectionString);
 builder.Services.AddMemoryCache(o => o.SizeLimit = 10_000);
