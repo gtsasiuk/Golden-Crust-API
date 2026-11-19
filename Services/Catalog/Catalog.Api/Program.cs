@@ -56,6 +56,7 @@ builder.Services.AddAutoMapper(cfg =>
 
 builder.Services.AddControllers();
 builder.Services.AddGrpc(o => o.Interceptors.Add<LoggingInterceptor>());
+builder.Services.AddGrpcHealthChecks();
 if (builder.Environment.IsDevelopment())
     builder.Services.AddGrpcReflection();
 
@@ -92,6 +93,7 @@ using (var scope = app.Services.CreateScope())
 
 app.MapControllers();
 app.MapGrpcService<CatalogGrpcService>();
+app.MapGrpcHealthChecksService();
 if (app.Environment.IsDevelopment())
     app.MapGrpcReflectionService();
 app.MapDefaultEndpoints();

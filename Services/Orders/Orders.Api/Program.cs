@@ -37,6 +37,7 @@ builder.Services.AddAutoMapper(cfg =>
 
 builder.Services.AddControllers();
 builder.Services.AddGrpc(o => o.Interceptors.Add<LoggingInterceptor>());
+builder.Services.AddGrpcHealthChecks();
 if (builder.Environment.IsDevelopment())
     builder.Services.AddGrpcReflection();
 
@@ -69,6 +70,7 @@ if (app.Environment.IsDevelopment())
 
 app.MapControllers();
 app.MapGrpcService<OrdersGrpcService>();
+app.MapGrpcHealthChecksService();
 if (app.Environment.IsDevelopment())
     app.MapGrpcReflectionService();
 app.MapDefaultEndpoints();

@@ -59,6 +59,7 @@ builder.Services.AddControllers()
     .AddJsonOptions(o => o.JsonSerializerOptions.Converters.Add(
         new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)));
 builder.Services.AddGrpc(o => o.Interceptors.Add<LoggingInterceptor>());
+builder.Services.AddGrpcHealthChecks();
 if (builder.Environment.IsDevelopment())
     builder.Services.AddGrpcReflection();
 
@@ -87,6 +88,7 @@ if (app.Environment.IsDevelopment())
 
 app.MapControllers();
 app.MapGrpcService<ReviewsGrpcService>();
+app.MapGrpcHealthChecksService();
 if (app.Environment.IsDevelopment())
     app.MapGrpcReflectionService();
 app.MapDefaultEndpoints();

@@ -7,11 +7,39 @@ using Platform.Aggregator.Resilience;
 using Platform.Aggregator.Services;
 using Platform.ServiceDefaults;
 using Reviews.Contracts;
+using Grpc.Health.V1;
+using Platform.Aggregator.HealthChecks;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 builder.AddRedisDistributedCache("redis");
+
+builder.Services.AddGrpcClient<Health.HealthClient>(
+    "orders-health",
+    o => o.Address = new Uri(ResilienceProfiles.Orders.Address));
+
+builder.Services.AddGrpcClient<Health.HealthClient>(
+    "catalog-health",
+    o => o.Address = new Uri(ResilienceProfiles.Catalog.Address));
+
+builder.Services.AddGrpcClient<Health.HealthClient>(
+    "reviews-health",
+    o => o.Address = new Uri(ResilienceProfiles.Reviews.Address));
+
+builder.Services.AddHealthChecks()
+    .AddCheck<OrdersGrpcHealthCheck>(
+        "orders-api",
+        failureStatus: HealthStatus.Unhealthy,
+        tags: ["grpc", "downstream", "ready"])
+    .AddCheck<CatalogGrpcHealthCheck>(
+        "catalog-api",
+        failureStatus: HealthStatus.Unhealthy,
+        tags: ["grpc", "downstream", "ready"])
+    .AddCheck<ReviewsGrpcHealthCheck>(
+        "reviews-api",
+        failureStatus: HealthStatus.Unhealthy,
+        tags: ["grpc", "downstream", "ready"]);
 
 var redisConnectionString =
     builder.Configuration.GetConnectionString("redis")
