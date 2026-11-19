@@ -74,7 +74,9 @@ public static class Extensions
                 .AddAspNetCoreInstrumentation()
                 .AddHttpClientInstrumentation()
                 .AddRuntimeInstrumentation()
-                .AddMeter("GoldenCrust.Cache"))
+                .AddMeter("GoldenCrust.Cache")
+                .AddMeter("Polly")
+                .AddMeter("Orders.Api", "Catalog.Api", "Reviews.Api"))
             .WithTracing(t => t
                 .AddSource(builder.Environment.ApplicationName)
                 .AddSource("GoldenCrust.*")
@@ -106,13 +108,32 @@ public static class Extensions
         return builder;
     }
 
+
     public static WebApplication MapDefaultEndpoints(this WebApplication app)
     {
-        app.MapHealthChecks(HealthEndpointPath);
+        app.MapHealthChecks(HealthEndpointPath, new HealthCheckOptions
+        {
+            ResponseWriter = HealthCheckResponseWriter.WriteJsonResponse
+        });
+
         app.MapHealthChecks(AlivenessEndpointPath, new HealthCheckOptions
         {
-            Predicate = r => r.Tags.Contains("live")
+            Predicate = check => check.Tags.Contains("live"),
+            ResponseWriter = HealthCheckResponseWriter.WriteJsonResponse
         });
+
+        app.MapHealthChecks("/health/live", new HealthCheckOptions
+        {
+            Predicate = check => check.Tags.Contains("live"),
+            ResponseWriter = HealthCheckResponseWriter.WriteJsonResponse
+        });
+
+        app.MapHealthChecks("/health/ready", new HealthCheckOptions
+        {
+            Predicate = check => check.Tags.Contains("ready"),
+            ResponseWriter = HealthCheckResponseWriter.WriteJsonResponse
+        });
+
         return app;
     }
 }

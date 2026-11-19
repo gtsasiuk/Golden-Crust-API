@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using Platform.Aggregator.Resilience;
 using Catalog.Contracts;
 using Grpc.Core;
 using Orders.Contracts;
@@ -19,8 +20,7 @@ public class OrderAggregationService(
 {
     private const int LatestReviewsCount = 3;
 
-    private static readonly TimeSpan CallTimeout = TimeSpan.FromSeconds(5);
-    private static DateTime Deadline() => DateTime.UtcNow.Add(CallTimeout);
+    private static DateTime DeadlineFor(ResilienceProfile p) => DateTime.UtcNow.Add(p.CallDeadline);
 
     public async Task<FullOrderDto?> GetFullOrderAsync(long orderId, CancellationToken ct)
     {
@@ -28,8 +28,9 @@ public class OrderAggregationService(
         try
         {
             logger.LogInformation("Calling orders-api via gRPC for order {OrderId}", orderId);
+
             order = await orders.GetOrderAsync(new GetOrderRequest { Id = orderId },
-                deadline: Deadline(), cancellationToken: ct).ResponseAsync;
+                deadline: DeadlineFor(ResilienceProfiles.Orders), cancellationToken: ct).ResponseAsync;
         }
         catch (RpcException ex) when (ex.StatusCode == StatusCode.NotFound)
         {
@@ -53,10 +54,13 @@ public class OrderAggregationService(
         var reviewsRequest = new GetLatestForMenuItemsRequest { MenuItemIds = { ids }, Count = LatestReviewsCount };
 
         var menuTask = SafeAsync(
-            c => catalog.GetMenuItemsByIdsAsync(menuRequest, deadline: Deadline(), cancellationToken: c).ResponseAsync,
+            c => catalog.GetMenuItemsByIdsAsync(menuRequest,
+                deadline: DeadlineFor(ResilienceProfiles.Catalog), cancellationToken: c).ResponseAsync,
             "catalog-api", warnings, ct);
+
         var reviewsTask = SafeAsync(
-            c => reviews.GetLatestForMenuItemsAsync(reviewsRequest, deadline: Deadline(), cancellationToken: c).ResponseAsync,
+            c => reviews.GetLatestForMenuItemsAsync(reviewsRequest,
+                deadline: DeadlineFor(ResilienceProfiles.Reviews), cancellationToken: c).ResponseAsync,
             "reviews-api", warnings, ct);
 
         await Task.WhenAll(menuTask, reviewsTask);

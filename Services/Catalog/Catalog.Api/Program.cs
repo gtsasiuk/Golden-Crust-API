@@ -4,20 +4,49 @@ using Catalog.Bll;
 using Catalog.Bll.Mapping;
 using Catalog.Dal;
 using Catalog.Dal.Seeding;
+using Catalog.Api.Metrics;
+using Catalog.Bll.Metrics;
 using Microsoft.EntityFrameworkCore;
 using Platform.ServiceDefaults;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 builder.AddRedisDistributedCache("redis");
 
+var redisConnectionString =
+    builder.Configuration.GetConnectionString("redis")
+    ?? throw new InvalidOperationException(
+        "Redis connection string is missing");
+
+builder.Services.AddHealthChecks()
+    .AddRedis(
+        redisConnectionString: redisConnectionString,
+        name: "redis-cache",
+        failureStatus: HealthStatus.Degraded,
+        tags: ["cache", "redis", "ready"],
+        timeout: TimeSpan.FromSeconds(3));
+
+
 var connectionString = builder.Configuration.GetConnectionString("CatalogDb")
     ?? throw new InvalidOperationException("Connection string 'CatalogDb' is missing");
+
+builder.Services.AddHealthChecks()
+    .AddSqlServer(
+        connectionString: connectionString,
+        name: "catalog-db",
+        failureStatus: HealthStatus.Unhealthy,
+        tags: ["database", "sql", "ready"],
+        timeout: TimeSpan.FromSeconds(5));
 
 builder.Services.AddCatalogDal(connectionString);
 builder.Services.AddMemoryCache(o => o.SizeLimit = 10_000);
 builder.Services.AddCatalogBll();
+
+builder.Services.AddSingleton<CatalogSnapshot>();
+builder.Services.AddSingleton<ICatalogMetrics, CatalogMetrics>();
+builder.Services.AddHostedService<CatalogSnapshotRefresher>();
 
 builder.Services.AddAutoMapper(cfg =>
 {
@@ -27,6 +56,7 @@ builder.Services.AddAutoMapper(cfg =>
 
 builder.Services.AddControllers();
 builder.Services.AddGrpc(o => o.Interceptors.Add<LoggingInterceptor>());
+builder.Services.AddGrpcHealthChecks();
 if (builder.Environment.IsDevelopment())
     builder.Services.AddGrpcReflection();
 
@@ -63,6 +93,7 @@ using (var scope = app.Services.CreateScope())
 
 app.MapControllers();
 app.MapGrpcService<CatalogGrpcService>();
+app.MapGrpcHealthChecksService();
 if (app.Environment.IsDevelopment())
     app.MapGrpcReflectionService();
 app.MapDefaultEndpoints();

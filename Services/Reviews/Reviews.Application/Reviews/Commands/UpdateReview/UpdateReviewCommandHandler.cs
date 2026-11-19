@@ -6,10 +6,11 @@ using Reviews.Application.Reviews.Dtos;
 using Reviews.Domain.Entities;
 using Reviews.Domain.Exceptions;
 using Reviews.Domain.Interfaces;
+using Reviews.Application.Metrics;
 
 namespace Reviews.Application.Reviews.Commands.UpdateReview;
 
-public class UpdateReviewCommandHandler(IReviewRepository reviews, IMapper mapper, ICacheService cache)
+public class UpdateReviewCommandHandler(IReviewRepository reviews, IMapper mapper, ICacheService cache, IReviewMetrics metrics)
     : IRequestHandler<UpdateReviewCommand, ReviewDto>
 {
     public async Task<ReviewDto> Handle(UpdateReviewCommand cmd, CancellationToken ct)
@@ -25,6 +26,8 @@ public class UpdateReviewCommandHandler(IReviewRepository reviews, IMapper mappe
 
         await reviews.UpdateAsync(review, ct);
         await cache.RemoveAsync(CacheKeys.ListVersion, "ReviewUpdated", ct);
+
+        metrics.ReviewUpdated();
 
         return mapper.Map<ReviewDto>(review);
     }

@@ -3,20 +3,55 @@ using System.Diagnostics;
 using AutoMapper;
 using Microsoft.Extensions.Logging;
 using Orders.Bll.Dtos;
+using Orders.Bll.Metrics;
 using Orders.Dal.Interfaces;
 using Orders.Domain;
 
 namespace Orders.Bll.Services;
 
-public class OrderService(IUnitOfWork uow, IMapper mapper, ILogger<OrderService> logger) : IOrderService
+public class OrderService(IUnitOfWork uow, IMapper mapper, ILogger<OrderService> logger, IOrderMetrics metrics)
+    : IOrderService
 {
     private static readonly ActivitySource Source = new("GoldenCrust.Orders");
-    // Статуси, які можна виставляти через /status (кухня й доставка).
-    // Placed→Accepted робить checkout, Cancelled робить /cancel.
+
     private static readonly string[] KitchenStatuses =
         [OrderStatus.Cooking, OrderStatus.ReadyForDelivery, OrderStatus.Delivering, OrderStatus.Delivered];
 
-    public async Task<OrderDto> CreateAsync(CreateOrderDto dto, CancellationToken ct = default)
+    public Task<OrderDto> CreateAsync(CreateOrderDto dto, CancellationToken ct = default)
+        => MeasureAsync("create", () => CreateCoreAsync(dto, ct));
+
+    public Task CheckoutAsync(long orderId, bool simulateFailure = false, CancellationToken ct = default)
+        => MeasureAsync("checkout", () => CheckoutCoreAsync(orderId, simulateFailure, ct));
+
+    public Task ChangeStatusAsync(long orderId, ChangeOrderStatusDto dto, CancellationToken ct = default)
+        => MeasureAsync("change_status", () => ChangeStatusCoreAsync(orderId, dto, ct));
+
+    public Task CancelAsync(long orderId, string? reason = null, CancellationToken ct = default)
+        => MeasureAsync("cancel", () => CancelCoreAsync(orderId, reason, ct));
+
+    public async Task<OrderDto> GetByIdAsync(long id, CancellationToken ct = default)
+    {
+        var order = await uow.Orders.GetWithItemsAsync(id, ct)
+            ?? throw new NotFoundException($"Order {id} not found");
+        var payment = await uow.Payments.GetActiveByOrderIdAsync(id, ct);
+        return mapper.Map<OrderDto>(order) with { PaymentStatus = payment?.Status };
+    }
+
+    public async Task<IReadOnlyList<OrderSummaryDto>> GetByCustomerAsync(
+        long customerId, string? status, int pageNumber, int pageSize, CancellationToken ct = default)
+    {
+        if (pageNumber < 1) throw new ValidationException("pageNumber must be >= 1");
+        if (pageSize is < 1 or > 100) throw new ValidationException("pageSize must be between 1 and 100");
+        if (status is not null && !OrderStatus.All.Contains(status))
+            throw new ValidationException($"Unknown status '{status}'");
+        if (await uow.Customers.GetByIdAsync(customerId, ct) is null)
+            throw new NotFoundException($"Customer {customerId} not found");
+
+        var rows = await uow.Orders.GetByCustomerAsync(customerId, status, pageNumber, pageSize, ct);
+        return mapper.Map<IReadOnlyList<OrderSummaryDto>>(rows);
+    }
+
+    private async Task<OrderDto> CreateCoreAsync(CreateOrderDto dto, CancellationToken ct)
     {
         using var activity = Source.StartActivity("CreateOrder");
         activity?.SetTag("customer.id", dto.CustomerId);
@@ -66,6 +101,7 @@ public class OrderService(IUnitOfWork uow, IMapper mapper, ILogger<OrderService>
         }, ct);
 
         var created = await GetByIdAsync(orderId, ct);
+        metrics.OrderCreated(created.Status);
         activity?.SetTag("order.id", orderId);
         logger.LogInformation(
             "Order {OrderId} created for customer {CustomerId}: {ItemsCount} items, amount {Amount}, status {Status}",
@@ -73,29 +109,7 @@ public class OrderService(IUnitOfWork uow, IMapper mapper, ILogger<OrderService>
         return created;
     }
 
-    public async Task<OrderDto> GetByIdAsync(long id, CancellationToken ct = default)
-    {
-        var order = await uow.Orders.GetWithItemsAsync(id, ct)
-            ?? throw new NotFoundException($"Order {id} not found");
-        var payment = await uow.Payments.GetActiveByOrderIdAsync(id, ct);
-        return mapper.Map<OrderDto>(order) with { PaymentStatus = payment?.Status };
-    }
-
-    public async Task<IReadOnlyList<OrderSummaryDto>> GetByCustomerAsync(
-        long customerId, string? status, int pageNumber, int pageSize, CancellationToken ct = default)
-    {
-        if (pageNumber < 1) throw new ValidationException("pageNumber must be >= 1");
-        if (pageSize is < 1 or > 100) throw new ValidationException("pageSize must be between 1 and 100");
-        if (status is not null && !OrderStatus.All.Contains(status))
-            throw new ValidationException($"Unknown status '{status}'");
-        if (await uow.Customers.GetByIdAsync(customerId, ct) is null)
-            throw new NotFoundException($"Customer {customerId} not found");
-
-        var rows = await uow.Orders.GetByCustomerAsync(customerId, status, pageNumber, pageSize, ct);
-        return mapper.Map<IReadOnlyList<OrderSummaryDto>>(rows);
-    }
-
-    public async Task CheckoutAsync(long orderId, bool simulateFailure = false, CancellationToken ct = default)
+    private async Task CheckoutCoreAsync(long orderId, bool simulateFailure, CancellationToken ct)
     {
         using var activity = Source.StartActivity("ConfirmOrder");
         activity?.SetTag("order.id", orderId);
@@ -115,25 +129,58 @@ public class OrderService(IUnitOfWork uow, IMapper mapper, ILogger<OrderService>
             await uow.Orders.ConfirmAsync(orderId, ct);
         }, ct);
 
+        metrics.OrderConfirmed();
         logger.LogInformation("Order {OrderId} paid and confirmed, status {Status}", orderId, OrderStatus.Accepted);
     }
 
-    public async Task ChangeStatusAsync(long orderId, ChangeOrderStatusDto dto, CancellationToken ct = default)
+    private async Task ChangeStatusCoreAsync(long orderId, ChangeOrderStatusDto dto, CancellationToken ct)
     {
         if (!KitchenStatuses.Contains(dto.NewStatus))
             throw new ValidationException($"NewStatus must be one of: {string.Join(", ", KitchenStatuses)}");
 
-        await uow.Orders.ChangeStatusAsync(orderId, dto.NewStatus, dto.Note, ct);   // usp_ChangeStatus (сама транзакційна)
+        await uow.Orders.ChangeStatusAsync(orderId, dto.NewStatus, dto.Note, ct);
+        metrics.OrderStatusChanged(dto.NewStatus);
         logger.LogInformation("Order {OrderId} status changed to {Status}", orderId, dto.NewStatus);
     }
 
-    public async Task CancelAsync(long orderId, string? reason = null, CancellationToken ct = default)
+    private async Task CancelCoreAsync(long orderId, string? reason, CancellationToken ct)
     {
-        await uow.Orders.CancelAsync(orderId, reason, ct);                          // usp_CancelOrder (сама транзакційна)
+        await uow.Orders.CancelAsync(orderId, reason, ct);
+        metrics.OrderCancelled();
         logger.LogInformation("Order {OrderId} cancelled", orderId);
     }
 
-    // Шаблон "відкрити транзакцію → виконати → Commit, а при помилці Rollback і прокинути виняток далі"
+    private async Task<T> MeasureAsync<T>(string operation, Func<Task<T>> action)
+    {
+        var sw = Stopwatch.StartNew();
+        try
+        {
+            var result = await action();
+            metrics.RecordDuration(operation, true, sw.Elapsed.TotalMilliseconds);
+            return result;
+        }
+        catch
+        {
+            metrics.RecordDuration(operation, false, sw.Elapsed.TotalMilliseconds);
+            throw;
+        }
+    }
+
+    private async Task MeasureAsync(string operation, Func<Task> action)
+    {
+        var sw = Stopwatch.StartNew();
+        try
+        {
+            await action();
+            metrics.RecordDuration(operation, true, sw.Elapsed.TotalMilliseconds);
+        }
+        catch
+        {
+            metrics.RecordDuration(operation, false, sw.Elapsed.TotalMilliseconds);
+            throw;
+        }
+    }
+
     private async Task InTransactionAsync(Func<Task> work, CancellationToken ct)
     {
         await uow.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct);
@@ -144,7 +191,7 @@ public class OrderService(IUnitOfWork uow, IMapper mapper, ILogger<OrderService>
         }
         catch
         {
-            await uow.RollbackAsync(CancellationToken.None);   // відкат не має залежати від скасованого запиту
+            await uow.RollbackAsync(CancellationToken.None);
             throw;
         }
     }

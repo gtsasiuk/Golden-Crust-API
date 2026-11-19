@@ -4,7 +4,10 @@ using Orders.Bll.Mapping;
 using Orders.Bll.Services;
 using Orders.Dal;
 using Orders.Dal.Interfaces;
+using Orders.Api.Metrics;
+using Orders.Bll.Metrics;
 using Platform.ServiceDefaults;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,6 +15,14 @@ builder.AddServiceDefaults();
 
 var connectionString = builder.Configuration.GetConnectionString("OrdersDb")
     ?? throw new InvalidOperationException("Connection string 'OrdersDb' is missing");
+
+builder.Services.AddHealthChecks()
+    .AddSqlServer(
+        connectionString: connectionString,
+        name: "orders-db",
+        failureStatus: HealthStatus.Unhealthy,
+        tags: ["database", "sql", "ready"],
+        timeout: TimeSpan.FromSeconds(5));
 
 builder.Services.AddScoped<IUnitOfWork>(_ => new UnitOfWork(connectionString));
 builder.Services.AddScoped<ICustomerService, CustomerService>();
@@ -26,12 +37,17 @@ builder.Services.AddAutoMapper(cfg =>
 
 builder.Services.AddControllers();
 builder.Services.AddGrpc(o => o.Interceptors.Add<LoggingInterceptor>());
+builder.Services.AddGrpcHealthChecks();
 if (builder.Environment.IsDevelopment())
     builder.Services.AddGrpcReflection();
 
 builder.Services.AddProblemDetails(o => o.CustomizeProblemDetails = ctx =>
     ctx.ProblemDetails.Extensions["traceId"] = ctx.HttpContext.TraceIdentifier);
 builder.Services.AddExceptionHandler<DomainExceptionHandler>();
+
+builder.Services.AddSingleton<OrdersSnapshot>();
+builder.Services.AddSingleton<IOrderMetrics, OrderMetrics>();
+builder.Services.AddHostedService<OrdersSnapshotRefresher>();
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -54,6 +70,7 @@ if (app.Environment.IsDevelopment())
 
 app.MapControllers();
 app.MapGrpcService<OrdersGrpcService>();
+app.MapGrpcHealthChecksService();
 if (app.Environment.IsDevelopment())
     app.MapGrpcReflectionService();
 app.MapDefaultEndpoints();

@@ -7,15 +7,33 @@ using Catalog.Dal.Interfaces;
 using Catalog.Dal.Specifications;
 using Catalog.Domain.Entities;
 using Catalog.Domain.Exceptions;
+using Catalog.Bll.Metrics;
 
 namespace Catalog.Bll.Services;
 
-public class MenuItemService(IUnitOfWork uow, IMapper mapper, ICacheService cache, ILogger<MenuItemService> logger) : IMenuItemService
+public class MenuItemService(IUnitOfWork uow, IMapper mapper, ICacheService cache,ICatalogMetrics metrics,
+    ILogger<MenuItemService> logger) : IMenuItemService
 {
     private static readonly ActivitySource Source = new("GoldenCrust.Catalog");
     private const int MaxPageSize = 100;
 
     public async Task<PagedResult<MenuItemListDto>> GetListAsync(MenuItemsQuery q, CancellationToken ct = default)
+    {
+        var sw = Stopwatch.StartNew();
+        try
+        {
+            var result = await GetListCoreAsync(q, ct);
+            metrics.RecordDuration("list", true, sw.Elapsed.TotalMilliseconds);
+            return result;
+        }
+        catch
+        {
+            metrics.RecordDuration("list", false, sw.Elapsed.TotalMilliseconds);
+            throw;
+        }
+    }
+
+    private async Task<PagedResult<MenuItemListDto>> GetListCoreAsync(MenuItemsQuery q, CancellationToken ct)
     {
         var page = Math.Max(q.Page, 1);
         var pageSize = Math.Clamp(q.PageSize, 1, MaxPageSize);
@@ -29,12 +47,28 @@ public class MenuItemService(IUnitOfWork uow, IMapper mapper, ICacheService cach
     }
 
     public async Task<MenuItemDto> GetByIdAsync(long id, CancellationToken ct = default)
-        => await cache.GetOrCreateAsync(CacheKeys.MenuItem(id), async () =>
+    {
+        var sw = Stopwatch.StartNew();
+        var cacheHit = true;
+        try
         {
-            var item = await LoadAsync(id, ct);
-            return mapper.Map<MenuItemDto>(item);
-        }, CachePolicy.MenuItemCard, ct)
-           ?? throw new EntityNotFoundException(nameof(MenuItem), id);
+            var dto = await cache.GetOrCreateAsync(CacheKeys.MenuItem(id), async () =>
+            {
+                cacheHit = false;
+                var item = await LoadAsync(id, ct);
+                return mapper.Map<MenuItemDto>(item);
+            }, CachePolicy.MenuItemCard, ct)
+            ?? throw new EntityNotFoundException(nameof(MenuItem), id);
+
+            metrics.RecordDuration("get", true, sw.Elapsed.TotalMilliseconds, cacheHit ? "hit" : "miss");
+            return dto;
+        }
+        catch
+        {
+            metrics.RecordDuration("get", false, sw.Elapsed.TotalMilliseconds, cacheHit ? "hit" : "miss");
+            throw;
+        }
+    }
 
     public async Task<MenuItemDto> CreateAsync(CreateMenuItemDto input, CancellationToken ct = default)
     {
@@ -48,7 +82,8 @@ public class MenuItemService(IUnitOfWork uow, IMapper mapper, ICacheService cach
         await uow.MenuItems.AddAsync(item, ct);
         await uow.SaveChangesAsync(ct);
         logger.LogInformation("Menu item {MenuItemId} created in category {CategoryId}, price {Price}", item.Id, item.CategoryId, item.Price);
-        return await GetByIdAsync(item.Id, ct);   // нова страва: у кеші її ще немає, інвалідувати нічого
+        metrics.MenuItemCreated();
+        return await GetByIdAsync(item.Id, ct);
     }
 
     public async Task<MenuItemDto> UpdateAsync(long id, UpdateMenuItemDto input, CancellationToken ct = default)
@@ -65,6 +100,7 @@ public class MenuItemService(IUnitOfWork uow, IMapper mapper, ICacheService cach
         item.MoveToCategory(input.CategoryId);
         item.ChangePrice(input.Price);
         await uow.SaveChangesAsync(ct);
+        metrics.MenuItemUpdated("info");
         await InvalidateCardAsync(id, "MenuItemUpdated", ct);
         return await GetByIdAsync(id, ct);
     }
@@ -79,6 +115,7 @@ public class MenuItemService(IUnitOfWork uow, IMapper mapper, ICacheService cach
         var oldPrice = item.Price;
         item.ChangePrice(input.Price);
         await uow.SaveChangesAsync(ct);
+        metrics.MenuItemUpdated("price");
         await InvalidateCardAsync(id, "PriceChanged", ct);
 
         logger.LogInformation("Menu item {MenuItemId} price changed from {OldPrice} to {NewPrice}",
@@ -92,6 +129,7 @@ public class MenuItemService(IUnitOfWork uow, IMapper mapper, ICacheService cach
                    ?? throw new EntityNotFoundException(nameof(MenuItem), id);
         item.SetAvailability(input.IsAvailable);
         await uow.SaveChangesAsync(ct);
+        metrics.MenuItemUpdated("availability");
         await InvalidateCardAsync(id, "AvailabilityChanged", ct);
         logger.LogInformation("Menu item {MenuItemId} availability set to {IsAvailable}", id, input.IsAvailable);
         return await GetByIdAsync(id, ct);
@@ -103,6 +141,7 @@ public class MenuItemService(IUnitOfWork uow, IMapper mapper, ICacheService cach
                    ?? throw new EntityNotFoundException(nameof(MenuItem), id);
         item.SoftDelete();
         await uow.SaveChangesAsync(ct);
+        metrics.MenuItemDeleted();
         await InvalidateCardAsync(id, "MenuItemDeleted", ct);
     }
 
@@ -111,6 +150,7 @@ public class MenuItemService(IUnitOfWork uow, IMapper mapper, ICacheService cach
         var item = await LoadAsync(id, ct);
         item.SetDetail(input.Description, input.Ingredients, input.WeightGrams, input.Calories);
         await uow.SaveChangesAsync(ct);
+        metrics.MenuItemUpdated("details");
         await InvalidateCardAsync(id, "DetailsChanged", ct);
         return mapper.Map<MenuItemDto>(item);
     }
