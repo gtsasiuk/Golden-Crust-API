@@ -38,4 +38,69 @@ public sealed class MenuItemRepository : RepositoryBase, IMenuItemRepository
                 new CommandDefinition(sql, new { Ids = ids.ToArray() }, Transaction, cancellationToken: ct));
             return rows.ToList();
         });
+
+    public Task<bool> ApplyPriceChangedAsync(long id, string name, decimal price, DateTime occurredAt, CancellationToken ct = default) =>
+        RunAsync(async () =>
+        {
+            const string sql = """
+            UPDATE dbo.MenuItems
+            SET Name = @Name,
+                Price = @Price,
+                SourceUpdatedAt = @OccurredAt,
+                UpdatedAt = SYSUTCDATETIME()
+            WHERE Id = @Id
+              AND IsDeleted = 0
+              AND (
+                  SourceUpdatedAt IS NULL
+                  OR SourceUpdatedAt < @OccurredAt
+              );
+            """;
+
+            await EnsureOpenAsync(ct);
+
+            var affected = await Connection.ExecuteAsync(
+                new CommandDefinition(sql,
+                    new
+                    {
+                        Id = id,
+                        Name = name,
+                        Price = price,
+                        OccurredAt = occurredAt
+                    },
+                    Transaction, cancellationToken: ct));
+
+            return affected > 0;
+        });
+
+    public Task<bool> ApplyRenamedAsync(long id, string name, DateTime occurredAt, CancellationToken ct = default) =>
+        RunAsync(async () =>
+        {
+            const string sql = """
+            UPDATE dbo.MenuItems
+            SET Name = @Name,
+                SourceUpdatedAt = @OccurredAt,
+                UpdatedAt = SYSUTCDATETIME()
+            WHERE Id = @Id
+              AND IsDeleted = 0
+              AND (
+                  SourceUpdatedAt IS NULL
+                  OR SourceUpdatedAt < @OccurredAt
+              );
+            """;
+
+            await EnsureOpenAsync(ct);
+
+            var affected = await Connection.ExecuteAsync(
+                new CommandDefinition(sql,
+                    new
+                    {
+                        Id = id,
+                        Name = name,
+                        OccurredAt = occurredAt
+                    },
+                    Transaction, cancellationToken: ct));
+
+            return affected > 0;
+        });
+
 }

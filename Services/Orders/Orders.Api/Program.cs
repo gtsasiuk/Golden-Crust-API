@@ -9,6 +9,8 @@ using Orders.Bll.Metrics;
 using Platform.ServiceDefaults;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Platform.EventBus.DependencyInjection;
+using Orders.Api.IntegrationEvents;
+using Orders.Bll.IntegrationEvents.Handlers;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -32,6 +34,13 @@ builder.Services.AddScoped<IUnitOfWork>(_ => new UnitOfWork(connectionString));
 builder.Services.AddScoped<ICustomerService, CustomerService>();
 builder.Services.AddScoped<IMenuService, MenuService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
+
+// Обробники integration events
+builder.Services.AddScoped<MenuItemPriceChangedHandler>();
+builder.Services.AddScoped<MenuItemRenamedHandler>();
+
+// Фоновий RabbitMQ Consumer
+builder.Services.AddHostedService<OrdersCatalogEventsConsumer>();
 
 builder.Services.AddAutoMapper(cfg =>
 {

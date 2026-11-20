@@ -19,12 +19,14 @@ public sealed class UnitOfWork : IUnitOfWork
         MenuItems = new MenuItemRepository(_connection, () => _transaction);
         Orders = new OrderRepository(_connection, () => _transaction);
         Payments = new PaymentRepository(_connection, () => _transaction);
+        ProcessedEvents = new ProcessedEventRepository(_connection, () => _transaction);
     }
 
     public ICustomerRepository Customers { get; }
     public IMenuItemRepository MenuItems { get; }
     public IOrderRepository Orders { get; }
     public IPaymentRepository Payments { get; }
+    public IProcessedEventRepository ProcessedEvents { get; }
 
     // Рівень ізоляції за замовчуванням: ReadCommitted (дефолт SQL Server). Це компроміс "deadlocks vs consistency":
     // Serializable прибрав би аномалії читання, але тримав би більше блокувань і підвищив ризик deadlock.
