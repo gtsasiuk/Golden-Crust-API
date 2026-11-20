@@ -15,6 +15,7 @@ using Platform.ServiceDefaults;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
+builder.AddRabbitMQClient("messaging");
 builder.AddRedisDistributedCache("redis");
 builder.Services.AddMemoryCache(o => o.SizeLimit = 10_000);
 
