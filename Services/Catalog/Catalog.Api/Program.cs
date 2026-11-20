@@ -17,6 +17,7 @@ builder.AddServiceDefaults();
 
 builder.AddRabbitMQClient("messaging");
 builder.Services.AddMessagingTopology();
+builder.Services.AddEventPublisher();
 
 builder.AddRedisDistributedCache("redis");
 

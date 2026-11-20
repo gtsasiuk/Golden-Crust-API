@@ -8,10 +8,13 @@ using Catalog.Dal.Specifications;
 using Catalog.Domain.Entities;
 using Catalog.Domain.Exceptions;
 using Catalog.Bll.Metrics;
+using Platform.EventBus.Contracts;
+using Platform.EventBus.Publishing;
+using Platform.EventBus.Topology;
 
 namespace Catalog.Bll.Services;
 
-public class MenuItemService(IUnitOfWork uow, IMapper mapper, ICacheService cache,ICatalogMetrics metrics,
+public class MenuItemService(IUnitOfWork uow, IMapper mapper, ICacheService cache, ICatalogMetrics metrics, IEventPublisher publisher,
     ILogger<MenuItemService> logger) : IMenuItemService
 {
     private static readonly ActivitySource Source = new("GoldenCrust.Catalog");
@@ -88,38 +91,97 @@ public class MenuItemService(IUnitOfWork uow, IMapper mapper, ICacheService cach
 
     public async Task<MenuItemDto> UpdateAsync(long id, UpdateMenuItemDto input, CancellationToken ct = default)
     {
-        var item = await uow.MenuItems.GetByIdAsync(id, ct)
-                   ?? throw new EntityNotFoundException(nameof(MenuItem), id);
+        var item = await uow.MenuItems.GetByIdAsync(id, ct)?? throw new EntityNotFoundException(nameof(MenuItem), id);
 
         await EnsureCategoryExistsAsync(input.CategoryId, ct);
-        var name = input.Name.Trim();
-        if (await uow.MenuItems.ExistsAsync(m => m.Name == name && m.Id != id, ct))
-            throw new ConflictException($"Menu item '{name}' already exists");
 
+        var name = input.Name.Trim();
+
+        if (await uow.MenuItems.ExistsAsync(m => m.Name == name && m.Id != id, ct))
+        {
+            throw new ConflictException($"Menu item '{name}' already exists");
+        }
+
+        // Зберігаємо попередні значення
+        var oldName = item.Name;
+        var oldPrice = item.Price;
+
+        // Виконуємо бізнес-зміни
         item.Rename(name);
         item.MoveToCategory(input.CategoryId);
         item.ChangePrice(input.Price);
+
+        // Спочатку зберігаємо зміни в БД
         await uow.SaveChangesAsync(ct);
+
+        // Отримуємо CorrelationId поточного запиту
+        var correlationId = Activity.Current?.GetTagItem("correlation.id")?.ToString();
+
+        // Подія перейменування
+        if (!string.Equals(oldName, item.Name, StringComparison.Ordinal))
+        {
+            await publisher.PublishAsync(
+                new MenuItemRenamedEvent(item.Id, oldName, item.Name)
+                {
+                    CorrelationId = correlationId
+                },
+                MessagingConstants.Exchanges.CatalogEvents,
+                MessagingConstants.RoutingKeys.MenuItemRenamed,
+                ct);
+        }
+
+        // Подія зміни ціни
+        if (oldPrice != item.Price)
+        {
+            await publisher.PublishAsync(
+                new MenuItemPriceChangedEvent(item.Id, item.Name, oldPrice, item.Price)
+                {
+                    CorrelationId = correlationId
+                },
+                MessagingConstants.Exchanges.CatalogEvents,
+                MessagingConstants.RoutingKeys.MenuItemPriceChanged,
+                ct);
+        }
+
         metrics.MenuItemUpdated("info");
+
         await InvalidateCardAsync(id, "MenuItemUpdated", ct);
+
         return await GetByIdAsync(id, ct);
     }
 
-    public async Task<MenuItemDto> ChangePriceAsync(long id, ChangePriceDto input, CancellationToken ct = default)
+    public async Task<MenuItemDto> ChangePriceAsync(long id, ChangePriceDto input,CancellationToken ct = default)
     {
         using var activity = Source.StartActivity("ChangePrice");
         activity?.SetTag("menuitem.id", id);
 
-        var item = await uow.MenuItems.GetByIdAsync(id, ct)
-                   ?? throw new EntityNotFoundException(nameof(MenuItem), id);
+        var item = await uow.MenuItems.GetByIdAsync(id, ct) ?? throw new EntityNotFoundException(nameof(MenuItem), id);
+
         var oldPrice = item.Price;
+
         item.ChangePrice(input.Price);
+
+        // Спочатку зберігаємо зміну в базі
         await uow.SaveChangesAsync(ct);
+
+        // Після успішного збереження публікуємо подію
+        var correlationId = Activity.Current?.GetTagItem("correlation.id")?.ToString();
+
+        await publisher.PublishAsync(
+            new MenuItemPriceChangedEvent(item.Id, item.Name, oldPrice, item.Price)
+            {
+                CorrelationId = correlationId
+            },
+            MessagingConstants.Exchanges.CatalogEvents,
+            MessagingConstants.RoutingKeys.MenuItemPriceChanged,
+            ct);
+
         metrics.MenuItemUpdated("price");
+
         await InvalidateCardAsync(id, "PriceChanged", ct);
 
-        logger.LogInformation("Menu item {MenuItemId} price changed from {OldPrice} to {NewPrice}",
-            id, oldPrice, input.Price);
+        logger.LogInformation("Menu item {MenuItemId} price changed from {OldPrice} to {NewPrice}", id, oldPrice, item.Price);
+
         return await GetByIdAsync(id, ct);
     }
 

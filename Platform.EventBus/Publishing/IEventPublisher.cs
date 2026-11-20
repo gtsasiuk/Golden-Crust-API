@@ -1,0 +1,13 @@
+using Platform.EventBus.Contracts;
+
+namespace Platform.EventBus.Publishing;
+
+public interface IEventPublisher
+{
+    Task PublishAsync<T>(
+        T @event,
+        string exchange,
+        string routingKey,
+        CancellationToken ct = default)
+        where T : IntegrationEvent;
+}
