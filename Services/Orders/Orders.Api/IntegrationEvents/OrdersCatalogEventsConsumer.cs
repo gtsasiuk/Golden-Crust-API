@@ -1,15 +1,18 @@
 using System.Diagnostics;
+using System.Globalization;
+using System.IO;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using OpenTelemetry.Trace;
 using Orders.Bll.IntegrationEvents.Handlers;
 using Platform.EventBus.Contracts;
 using Platform.EventBus.Diagnostics;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
-using OpenTelemetry.Trace;
+using Platform.EventBus.Tracing;
 
 namespace Orders.Api.IntegrationEvents;
 
@@ -25,10 +28,13 @@ public sealed class OrdersCatalogEventsConsumer(
 
     private IChannel? _channel;
     private string? _consumerTag;
+    private CancellationToken _stoppingToken;
 
     protected override async Task ExecuteAsync(
         CancellationToken stoppingToken)
     {
+        _stoppingToken = stoppingToken;
+
         _channel = await connection.CreateChannelAsync(
             cancellationToken: stoppingToken);
 
@@ -43,7 +49,6 @@ public sealed class OrdersCatalogEventsConsumer(
             cancellationToken: stoppingToken);
 
         var consumer = new AsyncEventingBasicConsumer(_channel);
-
         consumer.ReceivedAsync += OnMessageAsync;
 
         _consumerTag = await _channel.BasicConsumeAsync(
@@ -78,25 +83,17 @@ public sealed class OrdersCatalogEventsConsumer(
         var messageId = ea.BasicProperties.MessageId;
         var correlationId = GetCorrelationId(ea);
 
-        // Відновлюємо контекст W3C Trace Context.
-        var parentContext = ExtractActivityContext(ea);
+        using var activity = TracePropagation.StartConsumerActivity(ea, QueueName);
 
-        // Створюємо окрему Activity для обробки повідомлення.
-        using var activity =
-            EventBusDiagnostics.ActivitySource.StartActivity(
-                $"process {eventType}",
-                ActivityKind.Consumer,
-                parentContext);
+        activity?.SetTag("event.id", messageId);
+        activity?.SetTag("event.type", eventType);
+        activity?.SetTag("correlation.id", correlationId);
 
-        // Додаємо діагностичну інформацію.
         activity?.SetTag("messaging.system", "rabbitmq");
         activity?.SetTag("messaging.destination.name", QueueName);
         activity?.SetTag("messaging.operation.type", "process");
         activity?.SetTag("messaging.message.id", messageId);
         activity?.SetTag("messaging.rabbitmq.message.type", eventType);
-        activity?.SetTag("event.id", messageId);
-        activity?.SetTag("event.type", eventType);
-        activity?.SetTag("correlation.id", correlationId);
 
         try
         {
@@ -113,50 +110,71 @@ public sealed class OrdersCatalogEventsConsumer(
             {
                 case nameof(MenuItemPriceChangedEvent):
                     {
-                        var e = JsonSerializer.Deserialize<MenuItemPriceChangedEvent>(
-                            ea.Body.Span,
-                            JsonDefaults.Options)
-                            ?? throw new JsonException("Empty price event");
+                        var e =
+                            JsonSerializer.Deserialize<MenuItemPriceChangedEvent>(
+                                ea.Body.Span,
+                                JsonDefaults.Options)
+                            ?? throw new JsonException(
+                                "Empty price event");
 
-                        activity?.SetTag("event.menu_item_id", e.MenuItemId);
+                        ValidatePriceChangedEvent(e);
+
+                        activity?.SetTag(
+                            "event.menu_item_id",
+                            e.MenuItemId);
 
                         await scope.ServiceProvider
                             .GetRequiredService<MenuItemPriceChangedHandler>()
-                            .HandleAsync(e);
+                            .HandleAsync(e, _stoppingToken);
 
                         break;
                     }
 
                 case nameof(MenuItemRenamedEvent):
                     {
-                        var e = JsonSerializer.Deserialize<MenuItemRenamedEvent>(
-                            ea.Body.Span,
-                            JsonDefaults.Options)
-                            ?? throw new JsonException("Empty rename event");
+                        var e =
+                            JsonSerializer.Deserialize<MenuItemRenamedEvent>(
+                                ea.Body.Span,
+                                JsonDefaults.Options)
+                            ?? throw new JsonException(
+                                "Empty rename event");
 
-                        activity?.SetTag("event.menu_item_id", e.MenuItemId);
+                        ValidateRenamedEvent(e);
+
+                        activity?.SetTag(
+                            "event.menu_item_id",
+                            e.MenuItemId);
 
                         await scope.ServiceProvider
                             .GetRequiredService<MenuItemRenamedHandler>()
-                            .HandleAsync(e);
+                            .HandleAsync(e, _stoppingToken);
 
                         break;
                     }
 
                 default:
-                    throw new JsonException(
+                    throw new InvalidDataException(
                         $"Unsupported event type: {eventType}");
             }
-
-            await _channel!.BasicAckAsync(
-                ea.DeliveryTag,
-                multiple: false);
+        }
+        catch (OperationCanceledException)
+            when (_stoppingToken.IsCancellationRequested)
+        {
+            activity?.SetStatus(
+                ActivityStatusCode.Error,
+                "Message processing cancelled during shutdown");
 
             logger.LogInformation(
-                "Message {MessageId} acknowledged successfully",
+                "Message {MessageId} processing cancelled. " +
+                "It will be redelivered after consumer shutdown",
                 messageId);
+
+            // Не ACK і не NACK.
+            // Непідтверджене повідомлення буде повернуте RabbitMQ
+            // після закриття каналу або з'єднання.
+            return;
         }
-        catch (JsonException ex)
+        catch (Exception ex) when (IsPermanentMessageException(ex))
         {
             activity?.SetStatus(
                 ActivityStatusCode.Error,
@@ -166,13 +184,16 @@ public sealed class OrdersCatalogEventsConsumer(
 
             logger.LogError(
                 ex,
-                "Invalid message {MessageId}. Sending to DLQ",
-                messageId);
+                "Permanent error in message {MessageId}, EventType: {EventType}. Sending to DLQ",
+                messageId,
+                eventType);
 
             await _channel!.BasicNackAsync(
                 ea.DeliveryTag,
                 multiple: false,
                 requeue: false);
+
+            return;
         }
         catch (Exception ex)
         {
@@ -183,37 +204,66 @@ public sealed class OrdersCatalogEventsConsumer(
             activity?.RecordException(ex);
 
             await RetryOrDeadLetterAsync(ea, ex);
+
+            return;
         }
+
+        // ACK виконується тільки після успішної бізнес-обробки.
+        await _channel!.BasicAckAsync(
+            ea.DeliveryTag,
+            multiple: false);
+
+        logger.LogInformation(
+            "Message {MessageId} acknowledged successfully. EventType: {EventType}",
+            messageId,
+            eventType);
     }
 
-    private static ActivityContext ExtractActivityContext(
-        BasicDeliverEventArgs ea)
+    private static void ValidatePriceChangedEvent(
+        MenuItemPriceChangedEvent e)
     {
-        var headers = ea.BasicProperties.Headers;
+        if (e.EventId == Guid.Empty)
+            throw new InvalidDataException("EventId is empty");
 
-        if (headers is null)
-            return default;
+        if (e.MenuItemId <= 0)
+            throw new InvalidDataException("Invalid MenuItemId");
 
-        var traceParent = GetHeaderValue(
-            headers,
-            "traceparent");
+        if (string.IsNullOrWhiteSpace(e.MenuItemName))
+            throw new InvalidDataException("MenuItemName is empty");
 
-        var traceState = GetHeaderValue(
-            headers,
-            "tracestate");
+        if (e.OldPrice < 0 || e.NewPrice < 0)
+            throw new InvalidDataException("Invalid product price");
 
-        if (string.IsNullOrWhiteSpace(traceParent))
-            return default;
+        if (e.SchemaVersion <= 0)
+            throw new InvalidDataException("Invalid SchemaVersion");
+    }
 
-        if (ActivityContext.TryParse(
-                traceParent,
-                traceState,
-                out var context))
-        {
-            return context;
-        }
+    private static void ValidateRenamedEvent(
+        MenuItemRenamedEvent e)
+    {
+        if (e.EventId == Guid.Empty)
+            throw new InvalidDataException("EventId is empty");
 
-        return default;
+        if (e.MenuItemId <= 0)
+            throw new InvalidDataException("Invalid MenuItemId");
+
+        if (string.IsNullOrWhiteSpace(e.NewName))
+            throw new InvalidDataException("NewName is empty");
+
+        if (e.SchemaVersion <= 0)
+            throw new InvalidDataException("Invalid SchemaVersion");
+    }
+
+    private static bool IsPermanentMessageException(
+        Exception ex)
+    {
+        return ex is JsonException
+            or InvalidDataException
+            or ArgumentException
+            or FormatException
+            or NotSupportedException
+            or InvalidOperationException
+            or OverflowException;
     }
 
     private static string? GetCorrelationId(
@@ -256,14 +306,23 @@ public sealed class OrdersCatalogEventsConsumer(
 
         if (headers.TryGetValue("x-retry-count", out var value))
         {
-            var raw = value is byte[] bytes
-                ? Encoding.UTF8.GetString(bytes)
-                : value?.ToString();
+            if (!TryParseRetryCount(value, out attempt))
+            {
+                logger.LogError(
+                    ex,
+                    "Invalid x-retry-count header for message {MessageId}. Sending to DLQ",
+                    ea.BasicProperties.MessageId);
 
-            int.TryParse(raw, out attempt);
+                await _channel!.BasicNackAsync(
+                    ea.DeliveryTag,
+                    multiple: false,
+                    requeue: false);
+
+                return;
+            }
         }
 
-        if (attempt >= MaxRetries)
+        if (attempt < 0 || attempt >= MaxRetries)
         {
             logger.LogError(
                 ex,
@@ -295,6 +354,8 @@ public sealed class OrdersCatalogEventsConsumer(
             Headers = retryHeaders
         };
 
+        // Спочатку публікуємо повторне повідомлення.
+        // Оригінал підтверджуємо тільки після завершення публікації.
         await _channel!.BasicPublishAsync(
             exchange: string.Empty,
             routingKey: QueueName,
@@ -308,10 +369,40 @@ public sealed class OrdersCatalogEventsConsumer(
 
         logger.LogWarning(
             ex,
-            "Message {MessageId} retry {Attempt}/{MaxRetries}",
+            "Message {MessageId} retry {Attempt}/{MaxRetries}. EventType: {EventType}",
             ea.BasicProperties.MessageId,
             attempt + 1,
-            MaxRetries);
+            MaxRetries,
+            ea.BasicProperties.Type);
+    }
+
+    private static bool TryParseRetryCount(
+        object? value,
+        out int attempt)
+    {
+        attempt = 0;
+
+        try
+        {
+            var raw = value is byte[] bytes
+                ? Encoding.UTF8.GetString(bytes)
+                : Convert.ToString(
+                    value,
+                    CultureInfo.InvariantCulture);
+
+            return int.TryParse(
+                raw,
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out attempt);
+        }
+        catch (Exception ex) when (
+            ex is FormatException
+            or InvalidCastException
+            or OverflowException)
+        {
+            return false;
+        }
     }
 
     public override async Task StopAsync(
@@ -332,7 +423,11 @@ public sealed class OrdersCatalogEventsConsumer(
     {
         if (_channel is not null)
         {
-            _channel.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            _channel.DisposeAsync()
+                .AsTask()
+                .GetAwaiter()
+                .GetResult();
+
             _channel = null;
         }
 

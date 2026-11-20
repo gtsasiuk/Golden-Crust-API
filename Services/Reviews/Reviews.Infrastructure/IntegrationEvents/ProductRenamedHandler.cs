@@ -1,3 +1,4 @@
+
 using Microsoft.Extensions.Logging;
 using MongoDB.Bson;
 using MongoDB.Driver;
@@ -12,6 +13,7 @@ public sealed class ProductRenamedHandler(
     ILogger<ProductRenamedHandler> logger)
 {
     private readonly IMongoCollection<Review> _reviews = context.Reviews;
+
     private readonly IMongoCollection<BsonDocument> _processedEvents =
         context.ProcessedEvents;
 
@@ -19,7 +21,12 @@ public sealed class ProductRenamedHandler(
         MenuItemRenamedEvent e,
         CancellationToken cancellationToken = default)
     {
-        var eventId = e.EventId.ToString("D");
+        // 1. Перевіряємо коректність події.
+        if (e.EventId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "EventId cannot be empty");
+        }
 
         if (e.MenuItemId <= 0 || string.IsNullOrWhiteSpace(e.NewName))
         {
@@ -27,7 +34,21 @@ public sealed class ProductRenamedHandler(
                 "Invalid MenuItemRenamedEvent payload");
         }
 
-        // Перевіряємо, чи подія вже була успішно оброблена.
+        var eventId = e.EventId.ToString("D");
+        var newName = e.NewName.Trim();
+
+        // Зберігаємо час події з точністю до 100 наносекунд.
+        // Це дозволяє правильно порівнювати послідовність подій.
+        var occurredAt = e.OccurredAt.Kind == DateTimeKind.Unspecified
+            ? DateTime.SpecifyKind(e.OccurredAt, DateTimeKind.Utc)
+            : e.OccurredAt.ToUniversalTime();
+
+        var occurredAtTicks = occurredAt.Ticks;
+
+        // 2. Перевіряємо, чи подія вже була оброблена.
+        // Ця перевірка є оптимізацією.
+        // Основний захист від повторної обробки забезпечує
+        // атомарна умова під час оновлення документів.
         var alreadyProcessed = await _processedEvents
             .Find(Builders<BsonDocument>.Filter.Eq("_id", eventId))
             .AnyAsync(cancellationToken);
@@ -35,18 +56,36 @@ public sealed class ProductRenamedHandler(
         if (alreadyProcessed)
         {
             logger.LogInformation(
-                "Event {EventId} already processed. Skipping duplicate",
-                eventId);
+                "Duplicate event {EventId} skipped. MenuItemId: {MenuItemId}",
+                eventId,
+                e.MenuItemId);
 
             return;
         }
 
-        // Оновлюємо назву в усіх відгуках відповідного товару.
-        var filter = Builders<Review>.Filter
-            .Eq(r => r.MenuItemId, e.MenuItemId);
+        // 3. Вибираємо лише відгуки потрібного товару,
+        // для яких ця подія новіша за останню застосовану.
+        var filterBuilder = Builders<Review>.Filter;
 
+        var filter = filterBuilder.And(
+            filterBuilder.Eq(r => r.MenuItemId, e.MenuItemId),
+            filterBuilder.Or(
+                filterBuilder.Exists(
+                    "catalogNameUpdatedAtTicks",
+                    false),
+
+                filterBuilder.Lt(
+                    "catalogNameUpdatedAtTicks",
+                    occurredAtTicks)
+            )
+        );
+
+        // 4. Атомарно оновлюємо документи.
+        // Якщо документ уже має новішу або таку саму версію назви,
+        // він не потрапить під фільтр.
         var update = Builders<Review>.Update
-            .Set("menuItemName", e.NewName.Trim())
+            .Set("menuItemName", newName)
+            .Set("catalogNameUpdatedAtTicks", occurredAtTicks)
             .Set("updatedAt", DateTime.UtcNow)
             .Inc("version", 1);
 
@@ -55,16 +94,20 @@ public sealed class ProductRenamedHandler(
             update,
             cancellationToken: cancellationToken);
 
-        // Реєструємо EventId тільки після успішного оновлення відгуків.
-        // Повторна доставка безпечна: присвоєння тієї самої назви
-        // не змінює бізнес-результат.
+        // 5. Реєструємо успішно оброблену подію.
+        // _id у MongoDB має унікальний індекс автоматично.
         var processedEvent = new BsonDocument
         {
             { "_id", eventId },
             { "eventType", nameof(MenuItemRenamedEvent) },
             { "menuItemId", e.MenuItemId },
-            { "newName", e.NewName.Trim() },
-            { "processedAt", DateTime.UtcNow }
+            { "oldName", e.OldName },
+            { "newName", newName },
+            { "occurredAt", occurredAt },
+            { "occurredAtTicks", occurredAtTicks },
+            { "processedAt", DateTime.UtcNow },
+            { "matchedReviews", result.MatchedCount },
+            { "modifiedReviews", result.ModifiedCount }
         };
 
         try
@@ -76,19 +119,23 @@ public sealed class ProductRenamedHandler(
         catch (MongoWriteException ex)
             when (ex.WriteError?.Category == ServerErrorCategory.DuplicateKey)
         {
-            // Інший екземпляр Consumer уже зареєстрував цю подію.
+            // Інший екземпляр consumer уже зареєстрував EventId.
+            // Повторне оновлення документів не відбулося,
+            // оскільки воно захищене timestamp-фільтром.
             logger.LogInformation(
-                "Event {EventId} was registered by another consumer",
+                "Event {EventId} was already registered by another consumer",
                 eventId);
         }
 
+        // 6. Логуємо результат обробки.
         logger.LogInformation(
-            "Product renamed event processed. EventId: {EventId}, " +
-            "MenuItemId: {MenuItemId}, NewName: {NewName}, " +
-            "MatchedReviews: {MatchedCount}, ModifiedReviews: {ModifiedCount}",
+            "Product renamed event processed. " +
+            "EventId: {EventId}, MenuItemId: {MenuItemId}, " +
+            "NewName: {NewName}, MatchedReviews: {MatchedCount}, " +
+            "ModifiedReviews: {ModifiedCount}",
             eventId,
             e.MenuItemId,
-            e.NewName,
+            newName,
             result.MatchedCount,
             result.ModifiedCount);
     }

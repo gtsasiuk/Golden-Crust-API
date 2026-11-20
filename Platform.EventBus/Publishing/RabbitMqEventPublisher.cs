@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Platform.EventBus.Contracts;
 using Platform.EventBus.Diagnostics;
+using Platform.EventBus.Tracing;
 using RabbitMQ.Client;
 
 namespace Platform.EventBus.Publishing;
@@ -19,17 +20,41 @@ public sealed class RabbitMqEventPublisher(
         CancellationToken ct = default)
         where T : IntegrationEvent
     {
+        // Створюємо Producer Activity.
         using var activity =
-            EventBusDiagnostics.ActivitySource.StartActivity(
+            TracePropagation.Source.StartActivity(
                 $"publish {typeof(T).Name}",
                 ActivityKind.Producer);
 
         var currentActivity = activity ?? Activity.Current;
 
-        activity?.SetTag("messaging.system", "rabbitmq");
-        activity?.SetTag("messaging.destination.name", exchange);
-        activity?.SetTag("messaging.rabbitmq.destination.routing_key", routingKey);
-        activity?.SetTag("messaging.message.id", @event.EventId.ToString());
+        activity?.SetTag(
+            "messaging.system",
+            "rabbitmq");
+
+        activity?.SetTag(
+            "messaging.destination.name",
+            exchange);
+
+        activity?.SetTag(
+            "messaging.rabbitmq.destination.routing_key",
+            routingKey);
+
+        activity?.SetTag(
+            "messaging.operation.type",
+            "publish");
+
+        activity?.SetTag(
+            "messaging.message.id",
+            @event.EventId.ToString());
+
+        activity?.SetTag(
+            "event.type",
+            typeof(T).Name);
+
+        activity?.SetTag(
+            "event.id",
+            @event.EventId.ToString());
 
         var correlationId =
             @event.CorrelationId ??
@@ -39,31 +64,6 @@ public sealed class RabbitMqEventPublisher(
             await connection.CreateChannelAsync(
                 cancellationToken: ct);
 
-        var headers = new Dictionary<string, object?>
-        {
-            ["x-event-type"] = typeof(T).Name,
-            ["x-schema-version"] = @event.SchemaVersion,
-            ["x-occurred-at"] = @event.OccurredAt.ToString("O")
-        };
-
-        // W3C Trace Context
-        if (currentActivity is not null)
-        {
-            headers["traceparent"] = currentActivity.Id;
-
-            if (!string.IsNullOrWhiteSpace(
-                    currentActivity.TraceStateString))
-            {
-                headers["tracestate"] =
-                    currentActivity.TraceStateString;
-            }
-        }
-
-        if (!string.IsNullOrWhiteSpace(correlationId))
-        {
-            headers["x-correlation-id"] = correlationId;
-        }
-
         var properties = new BasicProperties
         {
             Persistent = true,
@@ -72,8 +72,19 @@ public sealed class RabbitMqEventPublisher(
             MessageId = @event.EventId.ToString(),
             Type = typeof(T).Name,
             CorrelationId = correlationId,
-            Headers = headers
+
+            Headers = new Dictionary<string, object?>
+            {
+                ["x-event-type"] = typeof(T).Name,
+                ["x-schema-version"] = @event.SchemaVersion,
+                ["x-occurred-at"] = @event.OccurredAt.ToString("O")
+            }
         };
+
+        // Передаємо traceparent, tracestate і CorrelationId.
+        TracePropagation.Inject(
+            properties,
+            correlationId);
 
         var body = JsonSerializer.SerializeToUtf8Bytes(
             @event,
@@ -88,7 +99,10 @@ public sealed class RabbitMqEventPublisher(
             cancellationToken: ct);
 
         logger.LogInformation(
-            "Published event {EventType}. EventId: {EventId}, TraceId: {TraceId}, CorrelationId: {CorrelationId}, Exchange: {Exchange}, RoutingKey: {RoutingKey}",
+            "Published event {EventType}. " +
+            "EventId: {EventId}, TraceId: {TraceId}, " +
+            "CorrelationId: {CorrelationId}, " +
+            "Exchange: {Exchange}, RoutingKey: {RoutingKey}",
             typeof(T).Name,
             @event.EventId,
             currentActivity?.TraceId.ToString(),

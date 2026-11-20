@@ -89,40 +89,51 @@ public class MenuItemService(IUnitOfWork uow, IMapper mapper, ICacheService cach
         return await GetByIdAsync(item.Id, ct);
     }
 
-    public async Task<MenuItemDto> UpdateAsync(long id, UpdateMenuItemDto input, CancellationToken ct = default)
+    public async Task<MenuItemDto> UpdateAsync(
+        long id,
+        UpdateMenuItemDto input,
+        CancellationToken ct = default)
     {
-        var item = await uow.MenuItems.GetByIdAsync(id, ct)?? throw new EntityNotFoundException(nameof(MenuItem), id);
+        var item = await uow.MenuItems.GetByIdAsync(id, ct)
+            ?? throw new EntityNotFoundException(nameof(MenuItem), id);
 
         await EnsureCategoryExistsAsync(input.CategoryId, ct);
 
         var name = input.Name.Trim();
 
-        if (await uow.MenuItems.ExistsAsync(m => m.Name == name && m.Id != id, ct))
+        if (await uow.MenuItems.ExistsAsync(
+            m => m.Name == name && m.Id != id, ct))
         {
-            throw new ConflictException($"Menu item '{name}' already exists");
+            throw new ConflictException(
+                $"Menu item '{name}' already exists");
         }
 
-        // Зберігаємо попередні значення
         var oldName = item.Name;
         var oldPrice = item.Price;
 
-        // Виконуємо бізнес-зміни
         item.Rename(name);
         item.MoveToCategory(input.CategoryId);
         item.ChangePrice(input.Price);
 
-        // Спочатку зберігаємо зміни в БД
+        // Спочатку зберігаємо всі бізнес-зміни.
         await uow.SaveChangesAsync(ct);
 
-        // Отримуємо CorrelationId поточного запиту
-        var correlationId = Activity.Current?.GetTagItem("correlation.id")?.ToString();
+        var correlationId =
+            Activity.Current?.GetTagItem("correlation.id")?.ToString();
 
-        // Подія перейменування
+        // Явно задаємо послідовні часові мітки подій.
+        var occurredAt = DateTime.UtcNow;
+
+        // Подія перейменування.
         if (!string.Equals(oldName, item.Name, StringComparison.Ordinal))
         {
             await publisher.PublishAsync(
-                new MenuItemRenamedEvent(item.Id, oldName, item.Name)
+                new MenuItemRenamedEvent(
+                    item.Id,
+                    oldName,
+                    item.Name)
                 {
+                    OccurredAt = occurredAt,
                     CorrelationId = correlationId
                 },
                 MessagingConstants.Exchanges.CatalogEvents,
@@ -130,12 +141,24 @@ public class MenuItemService(IUnitOfWork uow, IMapper mapper, ICacheService cach
                 ct);
         }
 
-        // Подія зміни ціни
+        // Подія зміни ціни.
+        // Якщо одночасно змінилася назва, час цієї події
+        // буде на один tick пізніший.
         if (oldPrice != item.Price)
         {
+            var priceEventTime =
+                !string.Equals(oldName, item.Name, StringComparison.Ordinal)
+                    ? occurredAt.AddTicks(1)
+                    : occurredAt;
+
             await publisher.PublishAsync(
-                new MenuItemPriceChangedEvent(item.Id, item.Name, oldPrice, item.Price)
+                new MenuItemPriceChangedEvent(
+                    item.Id,
+                    item.Name,
+                    oldPrice,
+                    item.Price)
                 {
+                    OccurredAt = priceEventTime,
                     CorrelationId = correlationId
                 },
                 MessagingConstants.Exchanges.CatalogEvents,
@@ -145,10 +168,14 @@ public class MenuItemService(IUnitOfWork uow, IMapper mapper, ICacheService cach
 
         metrics.MenuItemUpdated("info");
 
-        await InvalidateCardAsync(id, "MenuItemUpdated", ct);
+        await InvalidateCardAsync(
+            id,
+            "MenuItemUpdated",
+            ct);
 
         return await GetByIdAsync(id, ct);
     }
+
 
     public async Task<MenuItemDto> ChangePriceAsync(long id, ChangePriceDto input,CancellationToken ct = default)
     {

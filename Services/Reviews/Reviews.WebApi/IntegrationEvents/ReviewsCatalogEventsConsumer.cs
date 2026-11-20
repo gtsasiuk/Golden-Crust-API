@@ -1,16 +1,18 @@
 using System.Diagnostics;
+using System.Globalization;
+using System.IO;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using OpenTelemetry.Trace;
 using Platform.EventBus.Contracts;
 using Platform.EventBus.Diagnostics;
-using Platform.EventBus.Topology;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using Reviews.Infrastructure.IntegrationEvents;
-using OpenTelemetry.Trace;
+using Platform.EventBus.Tracing;
 
 namespace Reviews.WebApi.IntegrationEvents;
 
@@ -20,9 +22,7 @@ public sealed class ReviewsCatalogEventsConsumer(
     ILogger<ReviewsCatalogEventsConsumer> logger)
     : BackgroundService
 {
-    private const string QueueName =
-        MessagingConstants.Queues.ReviewsCatalogSync;
-
+    private const string QueueName = "reviews.catalog-sync";
     private const int PrefetchCount = 10;
     private const int MaxRetries = 3;
 
@@ -49,7 +49,6 @@ public sealed class ReviewsCatalogEventsConsumer(
             cancellationToken: stoppingToken);
 
         var consumer = new AsyncEventingBasicConsumer(_channel);
-
         consumer.ReceivedAsync += OnMessageAsync;
 
         _consumerTag = await _channel.BasicConsumeAsync(
@@ -84,22 +83,17 @@ public sealed class ReviewsCatalogEventsConsumer(
         var messageId = ea.BasicProperties.MessageId;
         var correlationId = GetCorrelationId(ea);
 
-        var parentContext = ExtractActivityContext(ea);
+        using var activity = TracePropagation.StartConsumerActivity(ea, QueueName);
 
-        using var activity =
-            EventBusDiagnostics.ActivitySource.StartActivity(
-                $"process {eventType}",
-                ActivityKind.Consumer,
-                parentContext);
+        activity?.SetTag("event.id", messageId);
+        activity?.SetTag("event.type", eventType);
+        activity?.SetTag("correlation.id", correlationId);
 
         activity?.SetTag("messaging.system", "rabbitmq");
         activity?.SetTag("messaging.destination.name", QueueName);
         activity?.SetTag("messaging.operation.type", "process");
         activity?.SetTag("messaging.message.id", messageId);
         activity?.SetTag("messaging.rabbitmq.message.type", eventType);
-        activity?.SetTag("event.id", messageId);
-        activity?.SetTag("event.type", eventType);
-        activity?.SetTag("correlation.id", correlationId);
 
         try
         {
@@ -114,13 +108,18 @@ public sealed class ReviewsCatalogEventsConsumer(
             {
                 case nameof(MenuItemRenamedEvent):
                     {
-                        var e = JsonSerializer.Deserialize<MenuItemRenamedEvent>(
-                            ea.Body.Span,
-                            JsonDefaults.Options)
+                        var e =
+                            JsonSerializer.Deserialize<MenuItemRenamedEvent>(
+                                ea.Body.Span,
+                                JsonDefaults.Options)
                             ?? throw new JsonException(
                                 "Empty MenuItemRenamedEvent");
 
-                        activity?.SetTag("event.menu_item_id", e.MenuItemId);
+                        ValidateRenamedEvent(e);
+
+                        activity?.SetTag(
+                            "event.menu_item_id",
+                            e.MenuItemId);
 
                         await using var scope =
                             scopes.CreateAsyncScope();
@@ -139,29 +138,51 @@ public sealed class ReviewsCatalogEventsConsumer(
 
                 case nameof(MenuItemPriceChangedEvent):
                     {
-                        // Reviews не зберігає копію ціни товару.
-                        // Подію ціни підтверджуємо без змін у MongoDB.
+                        var e =
+                            JsonSerializer.Deserialize<MenuItemPriceChangedEvent>(
+                                ea.Body.Span,
+                                JsonDefaults.Options)
+                            ?? throw new JsonException(
+                                "Empty MenuItemPriceChangedEvent");
+
+                        ValidatePriceChangedEvent(e);
+
+                        activity?.SetTag(
+                            "event.menu_item_id",
+                            e.MenuItemId);
+
+                        // Reviews не зберігає локальну копію ціни.
+                        // Тому подію приймаємо без зміни MongoDB.
                         logger.LogDebug(
-                            "Price event ignored by Reviews. MessageId: {MessageId}",
-                            messageId);
+                            "Price event ignored by Reviews. EventId: {EventId}, MenuItemId: {MenuItemId}",
+                            e.EventId,
+                            e.MenuItemId);
 
                         break;
                     }
 
                 default:
-                    throw new JsonException(
+                    throw new InvalidDataException(
                         $"Unsupported event type: {eventType}");
             }
-
-            await _channel!.BasicAckAsync(
-                ea.DeliveryTag,
-                multiple: false);
+        }
+        catch (OperationCanceledException)
+            when (_stoppingToken.IsCancellationRequested)
+        {
+            activity?.SetStatus(
+                ActivityStatusCode.Error,
+                "Message processing cancelled during shutdown");
 
             logger.LogInformation(
-                "Reviews message {MessageId} acknowledged successfully",
+                "Reviews message {MessageId} processing cancelled. " +
+                "It will be redelivered after consumer shutdown",
                 messageId);
+
+            // Не ACK і не NACK.
+            // Після закриття каналу RabbitMQ поверне повідомлення в чергу.
+            return;
         }
-        catch (JsonException ex)
+        catch (Exception ex) when (IsPermanentMessageException(ex))
         {
             activity?.SetStatus(
                 ActivityStatusCode.Error,
@@ -171,24 +192,16 @@ public sealed class ReviewsCatalogEventsConsumer(
 
             logger.LogError(
                 ex,
-                "Invalid Reviews message {MessageId}. Sending to DLQ",
-                messageId);
+                "Permanent error in Reviews message {MessageId}, EventType: {EventType}. Sending to DLQ",
+                messageId,
+                eventType);
 
             await _channel!.BasicNackAsync(
                 ea.DeliveryTag,
                 multiple: false,
                 requeue: false);
-        }
-        catch (OperationCanceledException)
-            when (_stoppingToken.IsCancellationRequested)
-        {
-            activity?.SetStatus(
-                ActivityStatusCode.Error,
-                "Message processing cancelled");
 
-            logger.LogInformation(
-                "Reviews message processing cancelled. MessageId: {MessageId}",
-                messageId);
+            return;
         }
         catch (Exception ex)
         {
@@ -199,34 +212,66 @@ public sealed class ReviewsCatalogEventsConsumer(
             activity?.RecordException(ex);
 
             await RetryOrDeadLetterAsync(ea, ex);
+
+            return;
         }
+
+        // ACK лише після успішної обробки.
+        await _channel!.BasicAckAsync(
+            ea.DeliveryTag,
+            multiple: false);
+
+        logger.LogInformation(
+            "Reviews message {MessageId} acknowledged successfully. EventType: {EventType}",
+            messageId,
+            eventType);
     }
 
-    private static ActivityContext ExtractActivityContext(
-        BasicDeliverEventArgs ea)
+    private static void ValidateRenamedEvent(
+        MenuItemRenamedEvent e)
     {
-        var headers = ea.BasicProperties.Headers;
+        if (e.EventId == Guid.Empty)
+            throw new InvalidDataException("EventId is empty");
 
-        if (headers is null)
-            return default;
+        if (e.MenuItemId <= 0)
+            throw new InvalidDataException("Invalid MenuItemId");
 
-        var traceParent = GetHeaderValue(
-            headers,
-            "traceparent");
+        if (string.IsNullOrWhiteSpace(e.NewName))
+            throw new InvalidDataException("NewName is empty");
 
-        var traceState = GetHeaderValue(
-            headers,
-            "tracestate");
+        if (e.SchemaVersion <= 0)
+            throw new InvalidDataException("Invalid SchemaVersion");
+    }
 
-        if (string.IsNullOrWhiteSpace(traceParent))
-            return default;
+    private static void ValidatePriceChangedEvent(
+        MenuItemPriceChangedEvent e)
+    {
+        if (e.EventId == Guid.Empty)
+            throw new InvalidDataException("EventId is empty");
 
-        return ActivityContext.TryParse(
-            traceParent,
-            traceState,
-            out var context)
-                ? context
-                : default;
+        if (e.MenuItemId <= 0)
+            throw new InvalidDataException("Invalid MenuItemId");
+
+        if (string.IsNullOrWhiteSpace(e.MenuItemName))
+            throw new InvalidDataException("MenuItemName is empty");
+
+        if (e.OldPrice < 0 || e.NewPrice < 0)
+            throw new InvalidDataException("Invalid product price");
+
+        if (e.SchemaVersion <= 0)
+            throw new InvalidDataException("Invalid SchemaVersion");
+    }
+
+    private static bool IsPermanentMessageException(
+        Exception ex)
+    {
+        return ex is JsonException
+            or InvalidDataException
+            or ArgumentException
+            or FormatException
+            or NotSupportedException
+            or InvalidOperationException
+            or OverflowException;
     }
 
     private static string? GetCorrelationId(
@@ -269,14 +314,23 @@ public sealed class ReviewsCatalogEventsConsumer(
 
         if (headers.TryGetValue("x-retry-count", out var value))
         {
-            var raw = value is byte[] bytes
-                ? Encoding.UTF8.GetString(bytes)
-                : value?.ToString();
+            if (!TryParseRetryCount(value, out attempt))
+            {
+                logger.LogError(
+                    ex,
+                    "Invalid x-retry-count header for Reviews message {MessageId}. Sending to DLQ",
+                    ea.BasicProperties.MessageId);
 
-            int.TryParse(raw, out attempt);
+                await _channel!.BasicNackAsync(
+                    ea.DeliveryTag,
+                    multiple: false,
+                    requeue: false);
+
+                return;
+            }
         }
 
-        if (attempt >= MaxRetries)
+        if (attempt < 0 || attempt >= MaxRetries)
         {
             logger.LogError(
                 ex,
@@ -308,6 +362,7 @@ public sealed class ReviewsCatalogEventsConsumer(
             Headers = retryHeaders
         };
 
+        // Спочатку публікуємо повторне повідомлення.
         await _channel!.BasicPublishAsync(
             exchange: string.Empty,
             routingKey: QueueName,
@@ -315,16 +370,47 @@ public sealed class ReviewsCatalogEventsConsumer(
             basicProperties: properties,
             body: ea.Body.ToArray());
 
+        // Оригінал підтверджуємо тільки після публікації.
         await _channel.BasicAckAsync(
             ea.DeliveryTag,
             multiple: false);
 
         logger.LogWarning(
             ex,
-            "Reviews message {MessageId} retry {Attempt}/{MaxRetries}",
+            "Reviews message {MessageId} retry {Attempt}/{MaxRetries}. EventType: {EventType}",
             ea.BasicProperties.MessageId,
             attempt + 1,
-            MaxRetries);
+            MaxRetries,
+            ea.BasicProperties.Type);
+    }
+
+    private static bool TryParseRetryCount(
+        object? value,
+        out int attempt)
+    {
+        attempt = 0;
+
+        try
+        {
+            var raw = value is byte[] bytes
+                ? Encoding.UTF8.GetString(bytes)
+                : Convert.ToString(
+                    value,
+                    CultureInfo.InvariantCulture);
+
+            return int.TryParse(
+                raw,
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out attempt);
+        }
+        catch (Exception ex) when (
+            ex is FormatException
+            or InvalidCastException
+            or OverflowException)
+        {
+            return false;
+        }
     }
 
     public override async Task StopAsync(
@@ -345,7 +431,11 @@ public sealed class ReviewsCatalogEventsConsumer(
     {
         if (_channel is not null)
         {
-            _channel.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            _channel.DisposeAsync()
+                .AsTask()
+                .GetAwaiter()
+                .GetResult();
+
             _channel = null;
         }
 

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text;
 using OpenTelemetry;
 using OpenTelemetry.Context.Propagation;
+using Platform.EventBus.Diagnostics;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 
@@ -9,41 +10,47 @@ namespace Platform.EventBus.Tracing;
 
 public static class TracePropagation
 {
-    public static readonly ActivitySource Source =
-        new("Platform.Messaging");
+    // Використовуємо єдиний ActivitySource для всієї системи.
+    public static ActivitySource Source =>
+        EventBusDiagnostics.ActivitySource;
 
     private static readonly TextMapPropagator Propagator =
         Propagators.DefaultTextMapPropagator;
 
-    private const string CorrelationHeader = "correlation-id";
+    private const string CorrelationHeader = "x-correlation-id";
 
-    // Передавання Trace Context у заголовки RabbitMQ.
+    // Передавання контексту трасування в RabbitMQ.
     public static void Inject(
         BasicProperties properties,
         string? correlationId = null)
     {
-        if (Activity.Current is not { } activity)
-            return;
-
         properties.Headers ??= new Dictionary<string, object?>();
 
-        Propagator.Inject(
-            new PropagationContext(
+        var activity = Activity.Current;
+
+        if (activity is not null)
+        {
+            var context = new PropagationContext(
                 activity.Context,
-                Baggage.Current),
-            properties.Headers,
-            (headers, key, value) =>
-            {
-                headers[key] = Encoding.UTF8.GetBytes(value);
-            });
+                Baggage.Current);
 
-        // CorrelationId передається окремо від traceparent.
-        correlationId ??= activity.TraceId.ToString();
+            Propagator.Inject(
+                context,
+                properties.Headers,
+                (headers, key, value) =>
+                {
+                    headers[key] = Encoding.UTF8.GetBytes(value);
+                });
+        }
 
-        properties.Headers[CorrelationHeader] =
-            Encoding.UTF8.GetBytes(correlationId);
+        // CorrelationId є окремим бізнес-ідентифікатором.
+        if (!string.IsNullOrWhiteSpace(correlationId))
+        {
+            properties.Headers[CorrelationHeader] =
+                Encoding.UTF8.GetBytes(correlationId);
 
-        properties.CorrelationId = correlationId;
+            properties.CorrelationId = correlationId;
+        }
     }
 
     // Відновлення контексту під час отримання повідомлення.
@@ -51,13 +58,15 @@ public static class TracePropagation
         BasicDeliverEventArgs ea,
         string queue)
     {
+        var headers = ea.BasicProperties.Headers;
+
         var parent = Propagator.Extract(
             default,
-            ea.BasicProperties.Headers,
-            (headers, key) =>
+            headers,
+            (carrier, key) =>
             {
-                if (headers is null ||
-                    !headers.TryGetValue(key, out var value))
+                if (carrier is null ||
+                    !carrier.TryGetValue(key, out var value))
                 {
                     return [];
                 }
@@ -79,19 +88,29 @@ public static class TracePropagation
             ActivityKind.Consumer,
             parent.ActivityContext);
 
-        activity?.SetTag("messaging.system", "rabbitmq");
-        activity?.SetTag("messaging.destination.name", queue);
         activity?.SetTag(
-            "messaging.message.id",
-            ea.BasicProperties.MessageId);
+            "messaging.system",
+            "rabbitmq");
+
+        activity?.SetTag(
+            "messaging.destination.name",
+            queue);
 
         activity?.SetTag(
             "messaging.operation.type",
             "process");
 
         activity?.SetTag(
-            "messaging.event.type",
+            "messaging.message.id",
+            ea.BasicProperties.MessageId);
+
+        activity?.SetTag(
+            "messaging.rabbitmq.message.type",
             ea.BasicProperties.Type);
+
+        activity?.SetTag(
+            "messaging.correlation.id",
+            ea.BasicProperties.CorrelationId);
 
         return activity;
     }
