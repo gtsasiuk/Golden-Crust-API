@@ -10,6 +10,7 @@ using Reviews.WebApi.ErrorHandling;
 using Reviews.WebApi.GrpcServices;
 using Reviews.WebApi.Mapping;
 using Reviews.WebApi.Metrics;
+using Reviews.WebApi.IntegrationEvents;
 using Platform.ServiceDefaults;
 using Platform.EventBus.DependencyInjection;
 
@@ -19,6 +20,7 @@ builder.AddServiceDefaults();
 
 builder.AddRabbitMQClient("messaging");
 builder.Services.AddMessagingTopology();
+builder.Services.AddHostedService<ReviewsCatalogEventsConsumer>();
 
 builder.AddRedisDistributedCache("redis");
 builder.Services.AddMemoryCache(o => o.SizeLimit = 10_000);

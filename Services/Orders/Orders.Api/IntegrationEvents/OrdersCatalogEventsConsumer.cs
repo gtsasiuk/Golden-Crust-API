@@ -197,8 +197,8 @@ public sealed class OrdersCatalogEventsConsumer(
         };
 
         await _channel!.BasicPublishAsync(
-            exchange: ea.Exchange,
-            routingKey: ea.RoutingKey,
+            exchange: string.Empty,
+            routingKey: QueueName,
             mandatory: false,
             basicProperties: properties,
             body: ea.Body.ToArray());
