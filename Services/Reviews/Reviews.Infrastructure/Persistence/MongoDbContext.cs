@@ -1,4 +1,4 @@
-
+using MongoDB.Bson;
 using Microsoft.Extensions.Options;
 using MongoDB.Driver;
 using Reviews.Domain.Entities;
@@ -10,6 +10,7 @@ public class MongoDbContext
 {
     public const string ReviewsCollection = "reviews";
     public const string DiscussionsCollection = "discussions";
+    public const string ProcessedEventsCollection = "processed_events";
 
     public MongoDbContext(IOptions<MongoDbOptions> options)
     {
@@ -40,6 +41,9 @@ public class MongoDbContext
 
     public IMongoCollection<Discussion> Discussions =>
         Database.GetCollection<Discussion>(DiscussionsCollection);
+
+    internal IMongoCollection<BsonDocument> ProcessedEvents =>
+        Database.GetCollection<BsonDocument>(ProcessedEventsCollection);
 
     internal IMongoCollection<ReviewReadModel> ReviewReadModels =>
         Database.GetCollection<ReviewReadModel>(ReviewsCollection);

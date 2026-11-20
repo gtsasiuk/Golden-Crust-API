@@ -7,4 +7,6 @@ public interface IMenuItemRepository
     Task<MenuItem?> GetByIdAsync(long id, CancellationToken ct = default);
     Task<IReadOnlyList<MenuItem>> GetAllAsync(CancellationToken ct = default);
     Task<IReadOnlyList<MenuItem>> GetByIdsAsync(IEnumerable<long> ids, CancellationToken ct = default);
+    Task<bool> ApplyPriceChangedAsync(long id, string name, decimal price, DateTime occurredAt, CancellationToken ct = default);
+    Task<bool> ApplyRenamedAsync(long id,string name, DateTime occurredAt, CancellationToken ct = default);
 }

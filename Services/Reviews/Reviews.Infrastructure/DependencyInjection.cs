@@ -4,6 +4,7 @@ using Reviews.Application.Common.Interfaces;
 using Reviews.Domain.Interfaces;
 using Reviews.Infrastructure.Persistence;
 using Reviews.Infrastructure.Seeding;
+using Reviews.Infrastructure.IntegrationEvents;
 
 namespace Reviews.Infrastructure;
 
@@ -26,6 +27,8 @@ public static class DependencyInjection
 
         services.AddScoped<IReviewRepository, ReviewRepository>();
         services.AddScoped<IReviewQueries, ReviewQueries>();
+
+        services.AddScoped<ProductRenamedHandler>();
 
         services.AddSingleton<IDataSeeder, ReviewSeeder>();
 

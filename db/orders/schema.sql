@@ -59,6 +59,12 @@ CREATE TABLE dbo.MenuItems (
     CONSTRAINT CK_MenuItems_Price CHECK (Price > 0)
 );
 GO
+IF COL_LENGTH('dbo.MenuItems', 'SourceUpdatedAt') IS NULL
+BEGIN
+    ALTER TABLE dbo.MenuItems
+    ADD SourceUpdatedAt DATETIME2 NULL;
+END;
+GO
 
 -- 3) Orders: 1:N Customers -> Orders ----------------------------------
 --    Без каскаду від Customers: історія замовлень не має зникати.
@@ -200,4 +206,17 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'UX_Payments_OrderId_Acti
     CREATE UNIQUE INDEX UX_Payments_OrderId_Active
         ON dbo.Payments (OrderId)
         WHERE Status <> 'Cancelled' AND Status <> 'Refunded';
+GO
+
+-- 8) ProcessedEvents: журнал успішно оброблених integration events
+IF OBJECT_ID(N'dbo.ProcessedEvents', N'U') IS NULL
+CREATE TABLE dbo.ProcessedEvents
+(
+    EventId UNIQUEIDENTIFIER NOT NULL,
+    ProcessedAt DATETIME2 NOT NULL
+        CONSTRAINT DF_ProcessedEvents_ProcessedAt
+        DEFAULT SYSUTCDATETIME(),
+
+    CONSTRAINT PK_ProcessedEvents PRIMARY KEY (EventId)
+);
 GO
