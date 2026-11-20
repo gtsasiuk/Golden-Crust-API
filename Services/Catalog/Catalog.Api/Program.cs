@@ -9,11 +9,15 @@ using Catalog.Bll.Metrics;
 using Microsoft.EntityFrameworkCore;
 using Platform.ServiceDefaults;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Platform.EventBus.DependencyInjection;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
+
 builder.AddRabbitMQClient("messaging");
+builder.Services.AddMessagingTopology();
+
 builder.AddRedisDistributedCache("redis");
 
 var redisConnectionString =

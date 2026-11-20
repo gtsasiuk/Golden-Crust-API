@@ -8,11 +8,14 @@ using Orders.Api.Metrics;
 using Orders.Bll.Metrics;
 using Platform.ServiceDefaults;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Platform.EventBus.DependencyInjection;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
+
 builder.AddRabbitMQClient("messaging");
+builder.Services.AddMessagingTopology();
 
 var connectionString = builder.Configuration.GetConnectionString("OrdersDb")
     ?? throw new InvalidOperationException("Connection string 'OrdersDb' is missing");

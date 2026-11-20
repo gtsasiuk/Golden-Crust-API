@@ -11,11 +11,15 @@ using Reviews.WebApi.GrpcServices;
 using Reviews.WebApi.Mapping;
 using Reviews.WebApi.Metrics;
 using Platform.ServiceDefaults;
+using Platform.EventBus.DependencyInjection;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
+
 builder.AddRabbitMQClient("messaging");
+builder.Services.AddMessagingTopology();
+
 builder.AddRedisDistributedCache("redis");
 builder.Services.AddMemoryCache(o => o.SizeLimit = 10_000);
 
