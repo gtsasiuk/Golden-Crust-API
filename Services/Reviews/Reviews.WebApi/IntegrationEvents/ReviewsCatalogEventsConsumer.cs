@@ -1,13 +1,16 @@
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Platform.EventBus.Contracts;
+using Platform.EventBus.Diagnostics;
 using Platform.EventBus.Topology;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using Reviews.Infrastructure.IntegrationEvents;
+using OpenTelemetry.Trace;
 
 namespace Reviews.WebApi.IntegrationEvents;
 
@@ -35,12 +38,10 @@ public sealed class ReviewsCatalogEventsConsumer(
         _channel = await connection.CreateChannelAsync(
             cancellationToken: stoppingToken);
 
-        // Перевіряємо, що спільна топологія вже створила чергу.
         await _channel.QueueDeclarePassiveAsync(
             QueueName,
             stoppingToken);
 
-        // Обмежуємо кількість непідтверджених повідомлень.
         await _channel.BasicQosAsync(
             prefetchSize: 0,
             prefetchCount: PrefetchCount,
@@ -79,15 +80,35 @@ public sealed class ReviewsCatalogEventsConsumer(
         object sender,
         BasicDeliverEventArgs ea)
     {
+        var eventType = ea.BasicProperties.Type ?? "Unknown";
+        var messageId = ea.BasicProperties.MessageId;
+        var correlationId = GetCorrelationId(ea);
+
+        var parentContext = ExtractActivityContext(ea);
+
+        using var activity =
+            EventBusDiagnostics.ActivitySource.StartActivity(
+                $"process {eventType}",
+                ActivityKind.Consumer,
+                parentContext);
+
+        activity?.SetTag("messaging.system", "rabbitmq");
+        activity?.SetTag("messaging.destination.name", QueueName);
+        activity?.SetTag("messaging.operation.type", "process");
+        activity?.SetTag("messaging.message.id", messageId);
+        activity?.SetTag("messaging.rabbitmq.message.type", eventType);
+        activity?.SetTag("event.id", messageId);
+        activity?.SetTag("event.type", eventType);
+        activity?.SetTag("correlation.id", correlationId);
+
         try
         {
-            var eventType = ea.BasicProperties.Type;
-
             logger.LogInformation(
-                "Reviews received event {EventType}. MessageId: {MessageId}, CorrelationId: {CorrelationId}",
+                "Reviews received event {EventType}. MessageId: {MessageId}, CorrelationId: {CorrelationId}, TraceId: {TraceId}",
                 eventType,
-                ea.BasicProperties.MessageId,
-                ea.BasicProperties.CorrelationId);
+                messageId,
+                correlationId,
+                Activity.Current?.TraceId.ToString());
 
             switch (eventType)
             {
@@ -98,6 +119,8 @@ public sealed class ReviewsCatalogEventsConsumer(
                             JsonDefaults.Options)
                             ?? throw new JsonException(
                                 "Empty MenuItemRenamedEvent");
+
+                        activity?.SetTag("event.menu_item_id", e.MenuItemId);
 
                         await using var scope =
                             scopes.CreateAsyncScope();
@@ -117,10 +140,10 @@ public sealed class ReviewsCatalogEventsConsumer(
                 case nameof(MenuItemPriceChangedEvent):
                     {
                         // Reviews не зберігає копію ціни товару.
-                        // Тому подію ціни підтверджуємо без змін у MongoDB.
+                        // Подію ціни підтверджуємо без змін у MongoDB.
                         logger.LogDebug(
                             "Price event ignored by Reviews. MessageId: {MessageId}",
-                            ea.BasicProperties.MessageId);
+                            messageId);
 
                         break;
                     }
@@ -130,23 +153,26 @@ public sealed class ReviewsCatalogEventsConsumer(
                         $"Unsupported event type: {eventType}");
             }
 
-            // Підтверджуємо повідомлення тільки після успішної обробки.
             await _channel!.BasicAckAsync(
                 ea.DeliveryTag,
                 multiple: false);
 
             logger.LogInformation(
                 "Reviews message {MessageId} acknowledged successfully",
-                ea.BasicProperties.MessageId);
+                messageId);
         }
         catch (JsonException ex)
         {
-            // Некоректний JSON або невідомий тип події.
-            // requeue:false відправляє повідомлення в DLQ.
+            activity?.SetStatus(
+                ActivityStatusCode.Error,
+                ex.Message);
+
+            activity?.RecordException(ex);
+
             logger.LogError(
                 ex,
                 "Invalid Reviews message {MessageId}. Sending to DLQ",
-                ea.BasicProperties.MessageId);
+                messageId);
 
             await _channel!.BasicNackAsync(
                 ea.DeliveryTag,
@@ -156,16 +182,80 @@ public sealed class ReviewsCatalogEventsConsumer(
         catch (OperationCanceledException)
             when (_stoppingToken.IsCancellationRequested)
         {
-            // Під час штатної зупинки не підтверджуємо
-            // незавершене повідомлення.
+            activity?.SetStatus(
+                ActivityStatusCode.Error,
+                "Message processing cancelled");
+
             logger.LogInformation(
                 "Reviews message processing cancelled. MessageId: {MessageId}",
-                ea.BasicProperties.MessageId);
+                messageId);
         }
         catch (Exception ex)
         {
+            activity?.SetStatus(
+                ActivityStatusCode.Error,
+                ex.Message);
+
+            activity?.RecordException(ex);
+
             await RetryOrDeadLetterAsync(ea, ex);
         }
+    }
+
+    private static ActivityContext ExtractActivityContext(
+        BasicDeliverEventArgs ea)
+    {
+        var headers = ea.BasicProperties.Headers;
+
+        if (headers is null)
+            return default;
+
+        var traceParent = GetHeaderValue(
+            headers,
+            "traceparent");
+
+        var traceState = GetHeaderValue(
+            headers,
+            "tracestate");
+
+        if (string.IsNullOrWhiteSpace(traceParent))
+            return default;
+
+        return ActivityContext.TryParse(
+            traceParent,
+            traceState,
+            out var context)
+                ? context
+                : default;
+    }
+
+    private static string? GetCorrelationId(
+        BasicDeliverEventArgs ea)
+    {
+        if (!string.IsNullOrWhiteSpace(
+                ea.BasicProperties.CorrelationId))
+        {
+            return ea.BasicProperties.CorrelationId;
+        }
+
+        return ea.BasicProperties.Headers is { } headers
+            ? GetHeaderValue(headers, "x-correlation-id")
+            : null;
+    }
+
+    private static string? GetHeaderValue(
+        IDictionary<string, object?> headers,
+        string key)
+    {
+        if (!headers.TryGetValue(key, out var value))
+            return null;
+
+        return value switch
+        {
+            byte[] bytes => Encoding.UTF8.GetString(bytes),
+            string text => text,
+            _ => value?.ToString()
+        };
     }
 
     private async Task RetryOrDeadLetterAsync(
@@ -218,7 +308,6 @@ public sealed class ReviewsCatalogEventsConsumer(
             Headers = retryHeaders
         };
 
-        // Повторно публікуємо повідомлення з тим самим routing key.
         await _channel!.BasicPublishAsync(
             exchange: string.Empty,
             routingKey: QueueName,
@@ -226,7 +315,6 @@ public sealed class ReviewsCatalogEventsConsumer(
             basicProperties: properties,
             body: ea.Body.ToArray());
 
-        // Оригінал підтверджуємо тільки після повторної публікації.
         await _channel.BasicAckAsync(
             ea.DeliveryTag,
             multiple: false);

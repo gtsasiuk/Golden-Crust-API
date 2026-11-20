@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
@@ -5,9 +6,10 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Orders.Bll.IntegrationEvents.Handlers;
 using Platform.EventBus.Contracts;
-using Platform.EventBus.Topology;
+using Platform.EventBus.Diagnostics;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
+using OpenTelemetry.Trace;
 
 namespace Orders.Api.IntegrationEvents;
 
@@ -30,9 +32,6 @@ public sealed class OrdersCatalogEventsConsumer(
         _channel = await connection.CreateChannelAsync(
             cancellationToken: stoppingToken);
 
-        // Топологія вже оголошується спільним
-        // RabbitMqTopologyHostedService через DI.
-        // Перевіряємо наявність потрібної черги.
         await _channel.QueueDeclarePassiveAsync(
             QueueName,
             stoppingToken);
@@ -75,17 +74,42 @@ public sealed class OrdersCatalogEventsConsumer(
         object sender,
         BasicDeliverEventArgs ea)
     {
+        var eventType = ea.BasicProperties.Type ?? "Unknown";
+        var messageId = ea.BasicProperties.MessageId;
+        var correlationId = GetCorrelationId(ea);
+
+        // Відновлюємо контекст W3C Trace Context.
+        var parentContext = ExtractActivityContext(ea);
+
+        // Створюємо окрему Activity для обробки повідомлення.
+        using var activity =
+            EventBusDiagnostics.ActivitySource.StartActivity(
+                $"process {eventType}",
+                ActivityKind.Consumer,
+                parentContext);
+
+        // Додаємо діагностичну інформацію.
+        activity?.SetTag("messaging.system", "rabbitmq");
+        activity?.SetTag("messaging.destination.name", QueueName);
+        activity?.SetTag("messaging.operation.type", "process");
+        activity?.SetTag("messaging.message.id", messageId);
+        activity?.SetTag("messaging.rabbitmq.message.type", eventType);
+        activity?.SetTag("event.id", messageId);
+        activity?.SetTag("event.type", eventType);
+        activity?.SetTag("correlation.id", correlationId);
+
         try
         {
             logger.LogInformation(
-                "Received event {EventType}, MessageId: {MessageId}, CorrelationId: {CorrelationId}",
-                ea.BasicProperties.Type,
-                ea.BasicProperties.MessageId,
-                ea.BasicProperties.CorrelationId);
+                "Received event {EventType}, MessageId: {MessageId}, CorrelationId: {CorrelationId}, TraceId: {TraceId}",
+                eventType,
+                messageId,
+                correlationId,
+                Activity.Current?.TraceId.ToString());
 
             await using var scope = scopes.CreateAsyncScope();
 
-            switch (ea.BasicProperties.Type)
+            switch (eventType)
             {
                 case nameof(MenuItemPriceChangedEvent):
                     {
@@ -93,6 +117,8 @@ public sealed class OrdersCatalogEventsConsumer(
                             ea.Body.Span,
                             JsonDefaults.Options)
                             ?? throw new JsonException("Empty price event");
+
+                        activity?.SetTag("event.menu_item_id", e.MenuItemId);
 
                         await scope.ServiceProvider
                             .GetRequiredService<MenuItemPriceChangedHandler>()
@@ -108,6 +134,8 @@ public sealed class OrdersCatalogEventsConsumer(
                             JsonDefaults.Options)
                             ?? throw new JsonException("Empty rename event");
 
+                        activity?.SetTag("event.menu_item_id", e.MenuItemId);
+
                         await scope.ServiceProvider
                             .GetRequiredService<MenuItemRenamedHandler>()
                             .HandleAsync(e);
@@ -117,7 +145,7 @@ public sealed class OrdersCatalogEventsConsumer(
 
                 default:
                     throw new JsonException(
-                        $"Unsupported event type: {ea.BasicProperties.Type}");
+                        $"Unsupported event type: {eventType}");
             }
 
             await _channel!.BasicAckAsync(
@@ -126,14 +154,20 @@ public sealed class OrdersCatalogEventsConsumer(
 
             logger.LogInformation(
                 "Message {MessageId} acknowledged successfully",
-                ea.BasicProperties.MessageId);
+                messageId);
         }
         catch (JsonException ex)
         {
+            activity?.SetStatus(
+                ActivityStatusCode.Error,
+                ex.Message);
+
+            activity?.RecordException(ex);
+
             logger.LogError(
                 ex,
                 "Invalid message {MessageId}. Sending to DLQ",
-                ea.BasicProperties.MessageId);
+                messageId);
 
             await _channel!.BasicNackAsync(
                 ea.DeliveryTag,
@@ -142,8 +176,73 @@ public sealed class OrdersCatalogEventsConsumer(
         }
         catch (Exception ex)
         {
+            activity?.SetStatus(
+                ActivityStatusCode.Error,
+                ex.Message);
+
+            activity?.RecordException(ex);
+
             await RetryOrDeadLetterAsync(ea, ex);
         }
+    }
+
+    private static ActivityContext ExtractActivityContext(
+        BasicDeliverEventArgs ea)
+    {
+        var headers = ea.BasicProperties.Headers;
+
+        if (headers is null)
+            return default;
+
+        var traceParent = GetHeaderValue(
+            headers,
+            "traceparent");
+
+        var traceState = GetHeaderValue(
+            headers,
+            "tracestate");
+
+        if (string.IsNullOrWhiteSpace(traceParent))
+            return default;
+
+        if (ActivityContext.TryParse(
+                traceParent,
+                traceState,
+                out var context))
+        {
+            return context;
+        }
+
+        return default;
+    }
+
+    private static string? GetCorrelationId(
+        BasicDeliverEventArgs ea)
+    {
+        if (!string.IsNullOrWhiteSpace(
+                ea.BasicProperties.CorrelationId))
+        {
+            return ea.BasicProperties.CorrelationId;
+        }
+
+        return ea.BasicProperties.Headers is { } headers
+            ? GetHeaderValue(headers, "x-correlation-id")
+            : null;
+    }
+
+    private static string? GetHeaderValue(
+        IDictionary<string, object?> headers,
+        string key)
+    {
+        if (!headers.TryGetValue(key, out var value))
+            return null;
+
+        return value switch
+        {
+            byte[] bytes => Encoding.UTF8.GetString(bytes),
+            string text => text,
+            _ => value?.ToString()
+        };
     }
 
     private async Task RetryOrDeadLetterAsync(
@@ -203,7 +302,6 @@ public sealed class OrdersCatalogEventsConsumer(
             basicProperties: properties,
             body: ea.Body.ToArray());
 
-        // Оригінал підтверджується лише після повторної публікації.
         await _channel.BasicAckAsync(
             ea.DeliveryTag,
             multiple: false);
@@ -219,7 +317,8 @@ public sealed class OrdersCatalogEventsConsumer(
     public override async Task StopAsync(
         CancellationToken cancellationToken)
     {
-        if (_channel is { IsOpen: true } && _consumerTag is not null)
+        if (_channel is { IsOpen: true } &&
+            _consumerTag is not null)
         {
             await _channel.BasicCancelAsync(
                 _consumerTag,

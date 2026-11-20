@@ -1,7 +1,8 @@
-
+using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Platform.EventBus.Contracts;
+using Platform.EventBus.Diagnostics;
 using RabbitMQ.Client;
 
 namespace Platform.EventBus.Publishing;
@@ -18,6 +19,22 @@ public sealed class RabbitMqEventPublisher(
         CancellationToken ct = default)
         where T : IntegrationEvent
     {
+        using var activity =
+            EventBusDiagnostics.ActivitySource.StartActivity(
+                $"publish {typeof(T).Name}",
+                ActivityKind.Producer);
+
+        var currentActivity = activity ?? Activity.Current;
+
+        activity?.SetTag("messaging.system", "rabbitmq");
+        activity?.SetTag("messaging.destination.name", exchange);
+        activity?.SetTag("messaging.rabbitmq.destination.routing_key", routingKey);
+        activity?.SetTag("messaging.message.id", @event.EventId.ToString());
+
+        var correlationId =
+            @event.CorrelationId ??
+            currentActivity?.TraceId.ToString();
+
         await using var channel =
             await connection.CreateChannelAsync(
                 cancellationToken: ct);
@@ -29,9 +46,22 @@ public sealed class RabbitMqEventPublisher(
             ["x-occurred-at"] = @event.OccurredAt.ToString("O")
         };
 
-        if (!string.IsNullOrWhiteSpace(@event.CorrelationId))
+        // W3C Trace Context
+        if (currentActivity is not null)
         {
-            headers["x-correlation-id"] = @event.CorrelationId;
+            headers["traceparent"] = currentActivity.Id;
+
+            if (!string.IsNullOrWhiteSpace(
+                    currentActivity.TraceStateString))
+            {
+                headers["tracestate"] =
+                    currentActivity.TraceStateString;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(correlationId))
+        {
+            headers["x-correlation-id"] = correlationId;
         }
 
         var properties = new BasicProperties
@@ -41,7 +71,7 @@ public sealed class RabbitMqEventPublisher(
             ContentEncoding = "utf-8",
             MessageId = @event.EventId.ToString(),
             Type = typeof(T).Name,
-            CorrelationId = @event.CorrelationId,
+            CorrelationId = correlationId,
             Headers = headers
         };
 
@@ -58,10 +88,11 @@ public sealed class RabbitMqEventPublisher(
             cancellationToken: ct);
 
         logger.LogInformation(
-            "Published event {EventType} with EventId {EventId}, CorrelationId {CorrelationId} to {Exchange}/{RoutingKey}",
+            "Published event {EventType}. EventId: {EventId}, TraceId: {TraceId}, CorrelationId: {CorrelationId}, Exchange: {Exchange}, RoutingKey: {RoutingKey}",
             typeof(T).Name,
             @event.EventId,
-            @event.CorrelationId,
+            currentActivity?.TraceId.ToString(),
+            correlationId,
             exchange,
             routingKey);
     }

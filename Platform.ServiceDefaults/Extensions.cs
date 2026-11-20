@@ -10,6 +10,7 @@ using Platform.ServiceDefaults;
 using Serilog;
 using Serilog.Events;
 using Serilog.Formatting.Compact;
+using Platform.EventBus.Diagnostics;
 
 namespace Microsoft.Extensions.Hosting;
 
@@ -81,6 +82,7 @@ public static class Extensions
                 .AddSource(builder.Environment.ApplicationName)
                 .AddSource("GoldenCrust.*")
                 .AddSource("MongoDB.Driver.Core.Extensions.DiagnosticSources")
+                .AddSource(EventBusDiagnostics.SourceName)
                 .AddAspNetCoreInstrumentation(o => o.Filter = ctx =>
                     !ctx.Request.Path.StartsWithSegments(HealthEndpointPath)
                     && !ctx.Request.Path.StartsWithSegments(AlivenessEndpointPath))
