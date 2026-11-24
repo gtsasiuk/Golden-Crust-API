@@ -65,6 +65,8 @@ builder.Services.Configure<DataProtectionTokenProviderOptions>(o => o.TokenLifes
 builder.Services.AddSingleton<IEmailService, MockEmailService>();
 builder.Services.AddSingleton<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IAccountService, AccountService>();
+builder.Services.AddScoped<IUserService, UserService>();
 
 // ── JWT Bearer ────────────────────────────────────────────────────────────────
 builder.Services
