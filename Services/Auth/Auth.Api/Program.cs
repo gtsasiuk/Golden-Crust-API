@@ -2,6 +2,8 @@ using System.Text;
 using Auth.Api.Data;
 using Auth.Api.Models;
 using Auth.Api.Options;
+using Auth.Api.Common;
+using Auth.Api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -57,6 +59,13 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 .AddEntityFrameworkStores<ApplicationDbContext>()
 .AddDefaultTokenProviders();
 
+// Термін дії токенів підтвердження email / скидання пароля (одноразові, зі строком дії)
+builder.Services.Configure<DataProtectionTokenProviderOptions>(o => o.TokenLifespan = TimeSpan.FromHours(24));
+
+builder.Services.AddSingleton<IEmailService, MockEmailService>();
+builder.Services.AddSingleton<IJwtTokenService, JwtTokenService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
+
 // ── JWT Bearer ────────────────────────────────────────────────────────────────
 builder.Services
     .AddAuthentication(options =>
@@ -90,6 +99,8 @@ builder.Services.AddAuthorization();
 builder.Services.AddControllers();
 builder.Services.AddProblemDetails(o => o.CustomizeProblemDetails = ctx =>
     ctx.ProblemDetails.Extensions["traceId"] = ctx.HttpContext.TraceIdentifier);
+
+builder.Services.AddExceptionHandler<AuthExceptionHandler>();
 
 var app = builder.Build();
 
