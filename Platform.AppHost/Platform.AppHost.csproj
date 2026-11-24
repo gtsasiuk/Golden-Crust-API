@@ -22,6 +22,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Platform.ApiGateway\Platform.ApiGateway.csproj" />
     <ProjectReference Include="..\Platform.Aggregator\Platform.Aggregator.csproj" />
+    <ProjectReference Include="..\Services\Auth\Auth.Api\Auth.Api.csproj" />
   </ItemGroup>
 
 </Project>
