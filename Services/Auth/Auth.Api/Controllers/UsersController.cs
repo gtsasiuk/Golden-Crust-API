@@ -60,9 +60,11 @@ public class UsersController(IUserService users) : ControllerBase
     }
 
     [HttpGet("{id}/roles")]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<IReadOnlyList<string>>> GetRoles(string id, CancellationToken ct)
-        => Ok(await users.GetRolesAsync(id, ct));
+    {
+        EnsureOwnerOrAdmin(id);
+        return Ok(await users.GetRolesAsync(id, ct));
+    }
 
     [HttpPost("{id}/roles")]
     [Authorize(Roles = Roles.Admin)]
