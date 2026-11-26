@@ -10,6 +10,8 @@ using Microsoft.EntityFrameworkCore;
 using Platform.ServiceDefaults;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Platform.EventBus.DependencyInjection;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+
 
 var builder = WebApplication.CreateBuilder(args);
 

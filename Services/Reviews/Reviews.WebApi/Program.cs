@@ -13,6 +13,7 @@ using Reviews.WebApi.Metrics;
 using Reviews.WebApi.IntegrationEvents;
 using Platform.ServiceDefaults;
 using Platform.EventBus.DependencyInjection;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 
 var builder = WebApplication.CreateBuilder(args);
 

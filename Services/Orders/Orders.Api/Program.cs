@@ -12,6 +12,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Platform.EventBus.DependencyInjection;
 using Orders.Api.IntegrationEvents;
 using Orders.Bll.IntegrationEvents.Handlers;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 
 var builder = WebApplication.CreateBuilder(args);
 

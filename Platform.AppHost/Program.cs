@@ -4,6 +4,16 @@ var sqlPassword = builder.AddParameter("sql-password", secret: true);
 var mongoPassword = builder.AddParameter("mongo-password", secret: true);
 var jwtSecret = builder.AddParameter("jwt-secret", secret: true);
 
+// Тестовий Admin
+var seedAdminUserName = builder.AddParameter("seed-admin-username");
+var seedAdminEmail = builder.AddParameter("seed-admin-email");
+var seedAdminPassword = builder.AddParameter("seed-admin-password", secret: true);
+
+// Тестовий User
+var seedUserUserName = builder.AddParameter("seed-user-username");
+var seedUserEmail = builder.AddParameter("seed-user-email");
+var seedUserPassword = builder.AddParameter("seed-user-password", secret: true);
+
 // SQL Server
 var sql = builder.AddSqlServer("sql", sqlPassword, port: 14330)
     .WithDataVolume();
@@ -32,6 +42,12 @@ var auth = builder.AddProject<Projects.Auth_Api>("auth-api")
     .WithReference(identityDb)
     .WaitFor(identityDb)
     .WithJwtSettings(jwtSecret)
+    .WithEnvironment("SeedAdmin__UserName", seedAdminUserName)
+    .WithEnvironment("SeedAdmin__Email", seedAdminEmail)
+    .WithEnvironment("SeedAdmin__Password", seedAdminPassword)
+    .WithEnvironment("SeedUser__UserName", seedUserUserName)
+    .WithEnvironment("SeedUser__Email", seedUserEmail)
+    .WithEnvironment("SeedUser__Password", seedUserPassword)
     .WithHttpHealthCheck("/health");
 
 // Orders API

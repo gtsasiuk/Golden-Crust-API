@@ -1,6 +1,7 @@
 using Catalog.Bll.Dto;
 using Catalog.Bll.Services;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Catalog.Api.Controllers;
 

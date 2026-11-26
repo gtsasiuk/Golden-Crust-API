@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Mvc;
 using Platform.Aggregator.Caching;
 using Platform.Aggregator.Models;
 using Platform.Aggregator.Services;
+using Microsoft.AspNetCore.Authorization;
+using Platform.ServiceDefaults;
 
 namespace Platform.Aggregator.Controllers;
 

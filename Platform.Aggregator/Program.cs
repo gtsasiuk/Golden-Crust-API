@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Catalog.Contracts;
 using Orders.Contracts;
 using Platform.Aggregator.Caching;
@@ -14,6 +15,18 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 builder.AddRedisDistributedCache("redis");
+
+var jwt = builder.Configuration.GetLocalJwtSettings();
+
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.MapInboundClaims = false;
+        options.TokenValidationParameters = jwt.ToValidationParameters();
+    });
+
+builder.Services.AddAuthorization();
 
 builder.Services.AddGrpcClient<Health.HealthClient>(
     "orders-health",
@@ -90,6 +103,9 @@ ResilienceLog.Init(app.Services.GetRequiredService<ILoggerFactory>());
 app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 if (app.Environment.IsDevelopment())
     app.MapOpenApi();
