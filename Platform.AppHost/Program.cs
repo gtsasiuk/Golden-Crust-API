@@ -31,7 +31,7 @@ var messaging = builder.AddRabbitMQ("messaging")
 var auth = builder.AddProject<Projects.Auth_Api>("auth-api")
     .WithReference(identityDb)
     .WaitFor(identityDb)
-    .WithEnvironment("Jwt__SecretKey", jwtSecret)
+    .WithJwtSettings(jwtSecret)
     .WithHttpHealthCheck("/health");
 
 // Orders API
@@ -40,6 +40,7 @@ var orders = builder.AddProject<Projects.Orders_Api>("orders-api")
     .WaitFor(ordersDb)
     .WithReference(messaging)
     .WaitFor(messaging)
+    .WithJwtSettings(jwtSecret)
     .WithHttpHealthCheck("/health");
 
 // Catalog API
@@ -49,6 +50,7 @@ var catalog = builder.AddProject<Projects.Catalog_Api>("catalog-api")
     .WithReference(redis)
     .WithReference(messaging)
     .WaitFor(messaging)
+    .WithJwtSettings(jwtSecret)
     .WithHttpHealthCheck("/health");
 
 // Reviews API
@@ -58,6 +60,7 @@ var reviews = builder.AddProject<Projects.Reviews_WebApi>("reviews-api")
     .WithReference(redis)
     .WithReference(messaging)
     .WaitFor(messaging)
+    .WithJwtSettings(jwtSecret)
     .WithHttpHealthCheck("/health");
 
 // Aggregator
@@ -69,6 +72,7 @@ var aggregator = builder.AddProject<Projects.Platform_Aggregator>("aggregator")
     .WaitFor(orders)
     .WaitFor(catalog)
     .WaitFor(reviews)
+    .WithJwtSettings(jwtSecret)
     .WithHttpHealthCheck("/health");
 
 // API Gateway
@@ -79,6 +83,8 @@ builder.AddProject<Projects.Platform_ApiGateway>("gateway")
     .WithReference(reviews)
     .WithReference(aggregator)
     .WaitFor(aggregator)
+    .WithReference(auth).WaitFor(auth)
+    .WithJwtSettings(jwtSecret)
     .WithHttpHealthCheck("/health");
 
 builder.Build().Run();

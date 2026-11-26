@@ -7,6 +7,7 @@ namespace Platform.Aggregator.Controllers;
 
 [ApiController]
 [Route("api/aggregator")]
+[Authorize(Roles = UserClaimsExtensions.AdminRole)]
 public class AggregatorController(CachedOrderAggregationService service, ILogger<AggregatorController> logger) : ControllerBase
 {
     [HttpGet("orders/{id:long}/full")]

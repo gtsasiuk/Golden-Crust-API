@@ -74,6 +74,17 @@ builder.Services.AddProblemDetails(o => o.CustomizeProblemDetails = ctx =>
     ctx.ProblemDetails.Extensions["traceId"] = ctx.HttpContext.TraceIdentifier);
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 
+var jwt = builder.Configuration.GetLocalJwtSettings();
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.MapInboundClaims = false;
+        options.TokenValidationParameters = jwt.ToValidationParameters();
+    });
+
+builder.Services.AddAuthorization();
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
@@ -92,6 +103,9 @@ if (app.Environment.IsDevelopment())
     mapScope.ServiceProvider.GetRequiredService<AutoMapper.IMapper>()
             .ConfigurationProvider.AssertConfigurationIsValid();
 }
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapControllers();
 app.MapGrpcService<ReviewsGrpcService>();

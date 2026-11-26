@@ -5,11 +5,13 @@ using Microsoft.AspNetCore.Mvc;
 namespace Catalog.Api.Controllers;
 
 [Route("api/tags")]
+[Authorize(Roles = "Admin")]
 [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
 [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
 public class TagsController(ITagService service) : ApiControllerBase
 {
     [HttpGet]
+    [AllowAnonymous]
     public async Task<ActionResult<IReadOnlyList<TagDto>>> GetAll(CancellationToken ct)
         => Ok(await service.GetAllAsync(ct));
 
@@ -22,6 +24,7 @@ public class TagsController(ITagService service) : ApiControllerBase
     }
 
     [HttpGet("{id:long}/menu-items")]
+    [AllowAnonymous]
     public async Task<ActionResult<IReadOnlyList<TagMenuItemDto>>> GetMenuItems(
         long id, [FromQuery] DateTime? since, CancellationToken ct)
         => Ok(await service.GetMenuItemsAsync(id, since, ct));

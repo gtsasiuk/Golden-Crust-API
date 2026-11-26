@@ -1,5 +1,6 @@
 using Orders.Api.Infrastructure;
 using Orders.Api.GrpcServices;
+using Orders.Api.Security;
 using Orders.Bll.Mapping;
 using Orders.Bll.Services;
 using Orders.Dal;
@@ -34,6 +35,7 @@ builder.Services.AddScoped<IUnitOfWork>(_ => new UnitOfWork(connectionString));
 builder.Services.AddScoped<ICustomerService, CustomerService>();
 builder.Services.AddScoped<IMenuService, MenuService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
+builder.Services.AddScoped<IAccessGuard, AccessGuard>();
 
 // Обробники integration events
 builder.Services.AddScoped<MenuItemPriceChangedHandler>();
@@ -58,6 +60,17 @@ builder.Services.AddProblemDetails(o => o.CustomizeProblemDetails = ctx =>
     ctx.ProblemDetails.Extensions["traceId"] = ctx.HttpContext.TraceIdentifier);
 builder.Services.AddExceptionHandler<DomainExceptionHandler>();
 
+var jwt = builder.Configuration.GetLocalJwtSettings();
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.MapInboundClaims = false;
+        options.TokenValidationParameters = jwt.ToValidationParameters();
+    });
+
+builder.Services.AddAuthorization();
+
 builder.Services.AddSingleton<OrdersSnapshot>();
 builder.Services.AddSingleton<IOrderMetrics, OrderMetrics>();
 builder.Services.AddHostedService<OrdersSnapshotRefresher>();
@@ -80,6 +93,9 @@ if (app.Environment.IsDevelopment())
     scope.ServiceProvider.GetRequiredService<AutoMapper.IMapper>()
          .ConfigurationProvider.AssertConfigurationIsValid();
 }
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapControllers();
 app.MapGrpcService<OrdersGrpcService>();

@@ -10,7 +10,8 @@ public static class IdentitySeeder
     public static async Task SeedAsync(IServiceProvider services, IConfiguration configuration, ILogger logger)
     {
         await SeedRolesAsync(services, logger);
-        await SeedAdminAsync(services, configuration, logger);
+        await SeedUserAsync(services, configuration, logger, "SeedAdmin", [Roles.Admin, Roles.User]);
+        await SeedUserAsync(services, configuration, logger, "SeedUser", [Roles.User]);
     }
 
     private static async Task SeedRolesAsync(IServiceProvider services, ILogger logger)
@@ -31,39 +32,40 @@ public static class IdentitySeeder
         }
     }
 
-    // Адмін створюється лише якщо секція SeedAdmin є в конфігурації (у нас — тільки Development)
-    private static async Task SeedAdminAsync(IServiceProvider services, IConfiguration configuration, ILogger logger)
+    private static async Task SeedUserAsync(
+        IServiceProvider services, IConfiguration configuration, ILogger logger,
+        string sectionName, string[] roles)
     {
-        var admin = configuration.GetSection(SeedAdminSettings.SectionName).Get<SeedAdminSettings>();
-        if (admin is null
-            || string.IsNullOrWhiteSpace(admin.UserName)
-            || string.IsNullOrWhiteSpace(admin.Email)
-            || string.IsNullOrWhiteSpace(admin.Password))
+        var seed = configuration.GetSection(sectionName).Get<SeedAdminSettings>();
+        if (seed is null
+            || string.IsNullOrWhiteSpace(seed.UserName)
+            || string.IsNullOrWhiteSpace(seed.Email)
+            || string.IsNullOrWhiteSpace(seed.Password))
             return;
 
         var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
 
-        if (await userManager.FindByNameAsync(admin.UserName) is not null)
+        if (await userManager.FindByNameAsync(seed.UserName) is not null)
             return;
 
         var user = new ApplicationUser
         {
-            UserName = admin.UserName,
-            Email = admin.Email,
+            UserName = seed.UserName,
+            Email = seed.Email,
             EmailConfirmed = true,
             CreatedAtUtc = DateTime.UtcNow
         };
 
-        var create = await userManager.CreateAsync(user, admin.Password);
+        var create = await userManager.CreateAsync(user, seed.Password);
         if (!create.Succeeded)
             throw new InvalidOperationException(
-                $"Cannot seed admin: {string.Join("; ", create.Errors.Select(e => e.Description))}");
+                $"Cannot seed {sectionName}: {string.Join("; ", create.Errors.Select(e => e.Description))}");
 
-        var addRoles = await userManager.AddToRolesAsync(user, [Roles.Admin, Roles.User]);
+        var addRoles = await userManager.AddToRolesAsync(user, roles);
         if (!addRoles.Succeeded)
             throw new InvalidOperationException(
-                $"Cannot assign roles to admin: {string.Join("; ", addRoles.Errors.Select(e => e.Description))}");
+                $"Cannot assign roles to {sectionName}: {string.Join("; ", addRoles.Errors.Select(e => e.Description))}");
 
-        logger.LogInformation("Seed admin {UserName} created", admin.UserName);
+        logger.LogInformation("Seed user {UserName} created ({Section})", seed.UserName, sectionName);
     }
 }

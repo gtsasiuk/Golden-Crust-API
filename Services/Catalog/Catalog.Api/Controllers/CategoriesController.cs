@@ -5,15 +5,18 @@ using Microsoft.AspNetCore.Mvc;
 namespace Catalog.Api.Controllers;
 
 [Route("api/categories")]
+[Authorize(Roles = "Admin")]
 [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
 [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
 public class CategoriesController(ICategoryService service) : ApiControllerBase
 {
     [HttpGet]
+    [AllowAnonymous]
     public async Task<ActionResult<IReadOnlyList<CategoryDto>>> GetAll(CancellationToken ct)
         => Ok(await service.GetAllAsync(ct));
 
     [HttpGet("{id:long}")]
+    [AllowAnonymous]
     public async Task<ActionResult<CategoryWithItemsDto>> GetById(long id, CancellationToken ct)
         => Ok(await service.GetByIdAsync(id, ct));
 

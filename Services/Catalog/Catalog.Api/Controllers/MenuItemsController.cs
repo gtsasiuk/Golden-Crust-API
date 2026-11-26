@@ -5,11 +5,13 @@ using Microsoft.AspNetCore.Mvc;
 namespace Catalog.Api.Controllers;
 
 [Route("api/menu-items")]
+[Authorize(Roles = "Admin")]
 [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
 [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
 public class MenuItemsController(IMenuItemService service) : ApiControllerBase
 {
     [HttpGet]
+    [AllowAnonymous]
     public async Task<ActionResult<PagedResult<MenuItemListDto>>> GetList(
         [FromQuery] MenuItemsQuery query, CancellationToken ct)
     {
@@ -20,6 +22,7 @@ public class MenuItemsController(IMenuItemService service) : ApiControllerBase
     }
 
     [HttpGet("{id:long}")]
+    [AllowAnonymous]
     public async Task<ActionResult<MenuItemDto>> GetById(long id, CancellationToken ct)
         => Ok(await service.GetByIdAsync(id, ct));
 

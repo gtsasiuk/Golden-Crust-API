@@ -1,11 +1,13 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Orders.Bll.Dtos;
 using Orders.Bll.Services;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Orders.Api.Controllers;
 
 // Лише читання: локальна копія довідника, власник даних Catalog
 [ApiController]
+[Authorize]
 [Route("api/menu-items")]
 public class MenuItemsController(IMenuService menu) : ControllerBase
 {
