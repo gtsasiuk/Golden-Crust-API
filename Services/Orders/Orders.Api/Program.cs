@@ -61,14 +61,11 @@ builder.Services.AddProblemDetails(o => o.CustomizeProblemDetails = ctx =>
     ctx.ProblemDetails.Extensions["traceId"] = ctx.HttpContext.TraceIdentifier);
 builder.Services.AddExceptionHandler<DomainExceptionHandler>();
 
-var jwt = builder.Configuration.GetLocalJwtSettings();
-
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        options.MapInboundClaims = false;
-        options.TokenValidationParameters = jwt.ToValidationParameters();
-    });
+builder.Services.AddLocalAndIdentityServerJwt(
+    builder.Configuration,
+    "orders_api",
+    "orders.read",
+    "orders.write");
 
 builder.Services.AddAuthorization();
 

@@ -7,9 +7,11 @@ using Reviews.Application.Common.Models;
 using Reviews.Application.Reviews.Dtos;
 using Reviews.Application.Reviews.Queries.GetReviewsList;
 using Reviews.Contracts;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Reviews.WebApi.GrpcServices;
 
+[Authorize(Policy = "reviews.read")]
 public class ReviewsGrpcService(ISender sender) : ReviewsService.ReviewsServiceBase
 {
     private const int MaxMenuItems = 100;

@@ -7,6 +7,7 @@ using Platform.Aggregator.Caching;
 using Platform.Aggregator.Resilience;
 using Platform.Aggregator.Services;
 using Platform.ServiceDefaults;
+using Platform.Aggregator.Security;
 using Reviews.Contracts;
 using Grpc.Health.V1;
 using Platform.Aggregator.HealthChecks;
@@ -15,6 +16,21 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 builder.AddRedisDistributedCache("redis");
+
+// IdentityServer Client Credentials token provider
+var identityServerAuthority =
+    builder.Configuration["IdentityServer:Authority"]
+    ?? throw new InvalidOperationException(
+        "IdentityServer:Authority is missing.");
+
+builder.Services.AddHttpClient<IdentityServerTokenProvider>(client =>
+{
+    client.BaseAddress = new Uri(
+        identityServerAuthority.TrimEnd('/') + "/");
+});
+
+builder.Services.AddTransient<IdentityServerTokenHandler>();
+builder.Services.AddTransient<IdentityServerGrpcInterceptor>();
 
 var jwt = builder.Configuration.GetLocalJwtSettings();
 
@@ -67,22 +83,35 @@ builder.Services.AddHealthChecks()
         tags: ["cache", "redis", "ready"],
         timeout: TimeSpan.FromSeconds(3));
 
-builder.Services.AddGrpcClient<OrdersService.OrdersServiceClient>(o => o.Address = new Uri(ResilienceProfiles.Orders.Address))
-    .ConfigureChannel(c => c.ServiceConfig = ResilienceProfiles.Orders.ToServiceConfig())
+
+builder.Services.AddGrpcClient<OrdersService.OrdersServiceClient>(
+    o => o.Address = new Uri(ResilienceProfiles.Orders.Address))
+    .ConfigureChannel(c =>
+        c.ServiceConfig = ResilienceProfiles.Orders.ToServiceConfig())
+    .AddInterceptor<IdentityServerGrpcInterceptor>()
     .AddProfiledResilience(ResilienceProfiles.Orders);
 
-builder.Services.AddGrpcClient<CatalogService.CatalogServiceClient>(o => o.Address = new Uri(ResilienceProfiles.Catalog.Address))
-    .ConfigureChannel(c => c.ServiceConfig = ResilienceProfiles.Catalog.ToServiceConfig())
+builder.Services.AddGrpcClient<CatalogService.CatalogServiceClient>(
+    o => o.Address = new Uri(ResilienceProfiles.Catalog.Address))
+    .ConfigureChannel(c =>
+        c.ServiceConfig = ResilienceProfiles.Catalog.ToServiceConfig())
+    .AddInterceptor<IdentityServerGrpcInterceptor>()
     .AddProfiledResilience(ResilienceProfiles.Catalog);
 
-builder.Services.AddGrpcClient<ReviewsService.ReviewsServiceClient>(o => o.Address = new Uri(ResilienceProfiles.Reviews.Address))
-    .ConfigureChannel(c => c.ServiceConfig = ResilienceProfiles.Reviews.ToServiceConfig())
+builder.Services.AddGrpcClient<ReviewsService.ReviewsServiceClient>(
+    o => o.Address = new Uri(ResilienceProfiles.Reviews.Address))
+    .ConfigureChannel(c =>
+        c.ServiceConfig = ResilienceProfiles.Reviews.ToServiceConfig())
+    .AddInterceptor<IdentityServerGrpcInterceptor>()
     .AddProfiledResilience(ResilienceProfiles.Reviews);
+
 
 foreach (var profile in ResilienceProfiles.All)
 {
     builder.Services
-        .AddHttpClient(profile.Name, c => c.BaseAddress = new Uri(profile.Address))
+        .AddHttpClient(profile.Name, c =>
+            c.BaseAddress = new Uri(profile.Address))
+        .AddHttpMessageHandler<IdentityServerTokenHandler>()
         .AddProfiledResilience(profile);
 }
 

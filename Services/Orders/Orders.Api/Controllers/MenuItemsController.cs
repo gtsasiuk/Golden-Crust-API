@@ -12,10 +12,12 @@ namespace Orders.Api.Controllers;
 public class MenuItemsController(IMenuService menu) : ControllerBase
 {
     [HttpGet]
+    [Authorize(Policy = "orders.read")]
     public async Task<ActionResult<IReadOnlyList<MenuItemDto>>> GetAll(CancellationToken ct)
         => Ok(await menu.GetAllAsync(ct));
 
     [HttpGet("{id:long}")]
+    [Authorize(Policy = "orders.read")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<MenuItemDto>> GetById(long id, CancellationToken ct)
         => Ok(await menu.GetByIdAsync(id, ct));

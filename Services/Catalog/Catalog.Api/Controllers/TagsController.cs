@@ -13,11 +13,13 @@ public class TagsController(ITagService service) : ApiControllerBase
 {
     [HttpGet]
     [AllowAnonymous]
+    [Authorize(Policy = "products.read")]
     public async Task<ActionResult<IReadOnlyList<TagDto>>> GetAll(CancellationToken ct)
         => Ok(await service.GetAllAsync(ct));
 
     [HttpPost]
     [ProducesResponseType(typeof(TagDto), StatusCodes.Status201Created)]
+    [Authorize(Policy = "products.write")]
     public async Task<ActionResult<TagDto>> Create(CreateTagDto input, CancellationToken ct)
     {
         var created = await service.CreateAsync(input, ct);
@@ -26,6 +28,7 @@ public class TagsController(ITagService service) : ApiControllerBase
 
     [HttpGet("{id:long}/menu-items")]
     [AllowAnonymous]
+    [Authorize(Policy = "products.read")]
     public async Task<ActionResult<IReadOnlyList<TagMenuItemDto>>> GetMenuItems(
         long id, [FromQuery] DateTime? since, CancellationToken ct)
         => Ok(await service.GetMenuItemsAsync(id, since, ct));

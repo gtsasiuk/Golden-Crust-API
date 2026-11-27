@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Microsoft.AspNetCore.Authorization;
 using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
 using Orders.Bll.Dtos;
@@ -8,6 +9,7 @@ using Orders.Domain;
 
 namespace Orders.Api.GrpcServices;
 
+[Authorize(Policy = "orders.read")]
 public class OrdersGrpcService(IOrderService orders) : OrdersService.OrdersServiceBase
 {
     public override async Task<OrderReply> GetOrder(GetOrderRequest request, ServerCallContext context)

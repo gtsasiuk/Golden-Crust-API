@@ -17,11 +17,13 @@ public class CustomersController(ICustomerService customers, IAccessGuard guard)
 {
     [HttpGet]
     [Authorize(Roles = UserClaimsExtensions.AdminRole)]
+    [Authorize(Policy = "orders.read")]
     public async Task<ActionResult<IReadOnlyList<CustomerDto>>> GetAll(CancellationToken ct)
         => Ok(await customers.GetAllAsync(ct));
 
     [HttpGet("{id:long}")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [Authorize(Policy = "orders.read")]
     public async Task<ActionResult<CustomerDto>> GetById(long id, CancellationToken ct)
     {
         await guard.EnsureCustomerAccessAsync(User, id, ct);
@@ -31,6 +33,7 @@ public class CustomersController(ICustomerService customers, IAccessGuard guard)
     [HttpPost]
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    [Authorize(Policy = "orders.write")]
     public async Task<ActionResult<CustomerDto>> Create(CreateCustomerDto input, CancellationToken ct)
     {
         guard.EnsureOwnEmail(User, input.Email);
@@ -42,6 +45,7 @@ public class CustomersController(ICustomerService customers, IAccessGuard guard)
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    [Authorize(Policy = "orders.write")]
     public async Task<IActionResult> Update(long id, UpdateCustomerDto input, CancellationToken ct)
     {
         await guard.EnsureCustomerAccessAsync(User, id, ct);
@@ -54,6 +58,7 @@ public class CustomersController(ICustomerService customers, IAccessGuard guard)
     [Authorize(Roles = UserClaimsExtensions.AdminRole)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [Authorize(Policy = "orders.write")]
     public async Task<IActionResult> Delete(long id, CancellationToken ct)
     {
         await customers.DeleteAsync(id, ct);
