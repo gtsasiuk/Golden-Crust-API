@@ -1,0 +1,29 @@
+@page
+@model Platform.IdentityServer.Pages.Account.LoginModel
+@{
+    ViewData["Title"] = "Вхід";
+}
+
+<h1>Вхід</h1>
+
+@if (!string.IsNullOrEmpty(Model.ClientName))
+{
+<p class="muted">Застосунок <strong>@Model.ClientName</strong> просить вас увійти.</p>
+}
+
+@if (!string.IsNullOrEmpty(Model.ErrorMessage))
+{
+<div class="error">@Model.ErrorMessage</div>
+}
+
+<form method="post">
+    <input type="hidden" asp-for="Input.ReturnUrl" />
+
+    <label asp-for="Input.UserName">Логін або email</label>
+    <input asp-for="Input.UserName" autofocus autocomplete="username" />
+
+    <label asp-for="Input.Password">Пароль</label>
+    <input asp-for="Input.Password" autocomplete="current-password" />
+
+    <button type="submit">Увійти</button>
+</form>

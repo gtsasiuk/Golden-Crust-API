@@ -1,0 +1,14 @@
+@page
+@{
+    ViewData["Title"] = "Головна";
+}
+
+<h1>Golden Crust IdentityServer</h1>
+<p>Сервер автентифікації працює.</p>
+<ul>
+    <li><a href="/.well-known/openid-configuration">Discovery document</a></li>
+</ul>
+@if (User.Identity?.IsAuthenticated == true)
+{
+<p class="muted">Ви увійшли як <strong>@User.Identity.Name</strong>. <a href="/Account/Logout">Вийти</a></p>
+}

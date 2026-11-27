@@ -3,6 +3,7 @@ var builder = DistributedApplication.CreateBuilder(args);
 var sqlPassword = builder.AddParameter("sql-password", secret: true);
 var mongoPassword = builder.AddParameter("mongo-password", secret: true);
 var jwtSecret = builder.AddParameter("jwt-secret", secret: true);
+var aggregatorClientSecret = builder.AddParameter("aggregator-client-secret", secret: true);
 
 // Тестовий Admin
 var seedAdminUserName = builder.AddParameter("seed-admin-username");
@@ -21,6 +22,7 @@ var sql = builder.AddSqlServer("sql", sqlPassword, port: 14330)
 var ordersDb = sql.AddDatabase("OrdersDb", "GoldenCrust_Orders");
 var catalogDb = sql.AddDatabase("CatalogDb", "GoldenCrust_Catalog");
 var identityDb = sql.AddDatabase("IdentityDb", "GoldenCrust_Identity");
+var identityServerDb = sql.AddDatabase("IdentityServerDb", "GoldenCrust_IdentityServer");
 
 // MongoDB
 var mongo = builder.AddMongoDB("mongo", port: 27018, password: mongoPassword)
@@ -42,6 +44,20 @@ var auth = builder.AddProject<Projects.Auth_Api>("auth-api")
     .WithReference(identityDb)
     .WaitFor(identityDb)
     .WithJwtSettings(jwtSecret)
+    .WithEnvironment("SeedAdmin__UserName", seedAdminUserName)
+    .WithEnvironment("SeedAdmin__Email", seedAdminEmail)
+    .WithEnvironment("SeedAdmin__Password", seedAdminPassword)
+    .WithEnvironment("SeedUser__UserName", seedUserUserName)
+    .WithEnvironment("SeedUser__Email", seedUserEmail)
+    .WithEnvironment("SeedUser__Password", seedUserPassword)
+    .WithHttpHealthCheck("/health");
+
+// Duende IdentityServer (Частина 2)
+var identityServer = builder.AddProject<Projects.Platform_IdentityServer>("identityserver")
+    .WithReference(identityServerDb)
+    .WaitFor(identityServerDb)
+    .WithHttpEndpoint(port: 5100, name: "public")
+    .WithEnvironment("Clients__AggregatorSecret", aggregatorClientSecret)
     .WithEnvironment("SeedAdmin__UserName", seedAdminUserName)
     .WithEnvironment("SeedAdmin__Email", seedAdminEmail)
     .WithEnvironment("SeedAdmin__Password", seedAdminPassword)
