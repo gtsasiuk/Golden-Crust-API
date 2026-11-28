@@ -15,3 +15,4 @@ logs/
 .env
 appsettings.Development.json
 *.local
+**/*.secrets
