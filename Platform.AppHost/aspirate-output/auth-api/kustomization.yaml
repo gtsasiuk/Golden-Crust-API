@@ -1,0 +1,37 @@
+resources:
+- deployment.yaml
+- service.yaml
+
+generatorOptions:
+  disableNameSuffixHash: true
+
+configMapGenerator:
+- name: auth-api-env
+  literals:
+    - OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY=in_memory
+    - ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
+    - HTTP_PORTS=8080
+    - IDENTITYDB_HOST=sql
+    - IDENTITYDB_PORT=14330
+    - IDENTITYDB_USERNAME=sa
+    - IDENTITYDB_PASSWORD=Sql_Pass123x
+    - IDENTITYDB_URI=mssql://sa:Sql_Pass123x@sql:14330/GoldenCrust_Identity
+    - IDENTITYDB_JDBCCONNECTIONSTRING=jdbc:sqlserver://sql:14330;databaseName=GoldenCrust_Identity;trustServerCertificate=true
+    - IDENTITYDB_DATABASENAME=GoldenCrust_Identity
+    - Jwt__Issuer=GoldenCrust.Auth
+    - Jwt__Audience=GoldenCrust.Api
+    - Jwt__SecretKey=super-strong-jwt-sercret-with-32-symbols-for-goldencrust
+    - SeedAdmin__UserName=admin
+    - SeedAdmin__Email=admin@email.com
+    - SeedAdmin__Password=admin123
+    - SeedUser__UserName=testuser
+    - SeedUser__Email=user@email.com
+    - SeedUser__Password=user123
+    - OTEL_EXPORTER_OTLP_ENDPOINT=http://aspire-dashboard:18889
+    - OTEL_SERVICE_NAME=auth-api
+    - ASPNETCORE_URLS=http://+:8080;
+
+secretGenerator:
+- name: auth-api-secrets
+  envs:
+  - .auth-api.secrets

@@ -1,0 +1,40 @@
+resources:
+- deployment.yaml
+- service.yaml
+
+generatorOptions:
+  disableNameSuffixHash: true
+
+configMapGenerator:
+- name: gateway-env
+  literals:
+    - OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY=in_memory
+    - ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
+    - HTTP_PORTS=8080;8001
+    - ORDERS_API_HTTP=http://orders-api:8080
+    - services__orders-api__http__0=http://orders-api:8080
+    - CATALOG_API_HTTP=http://catalog-api:8080
+    - services__catalog-api__http__0=http://catalog-api:8080
+    - REVIEWS_API_HTTP=http://reviews-api:8080
+    - services__reviews-api__http__0=http://reviews-api:8080
+    - AGGREGATOR_HTTP=http://aggregator:8080
+    - services__aggregator__http__0=http://aggregator:8080
+    - AUTH_API_HTTP=http://auth-api:8080
+    - services__auth-api__http__0=http://auth-api:8080
+    - IDENTITYSERVER_HTTP=http://identityserver:8080
+    - services__identityserver__http__0=http://identityserver:8080
+    - IDENTITYSERVER_PUBLIC=identityserver:8000
+    - services__identityserver__public__0=identityserver:8000
+    - KEYCLOAK_HTTP=http://keycloak:8080
+    - services__keycloak__http__0=http://keycloak:8080
+    - PAYMENTS_API_HTTP=http://payments-api:8080
+    - services__payments-api__http__0=http://payments-api:8080
+    - IdentityServer__Authority=identityserver:8000
+    - IdentityServer__Issuer=http://localhost:5100
+    - Jwt__Issuer=GoldenCrust.Auth
+    - Jwt__Audience=GoldenCrust.Api
+    - Jwt__SecretKey=super-strong-jwt-sercret-with-32-symbols-for-goldencrust
+    - OTEL_EXPORTER_OTLP_ENDPOINT=http://aspire-dashboard:18889
+    - OTEL_SERVICE_NAME=gateway
+    - ASPNETCORE_URLS=http://+:8080;
+

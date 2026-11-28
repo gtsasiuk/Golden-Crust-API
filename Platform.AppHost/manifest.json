@@ -1,0 +1,722 @@
+{
+  "resources": {
+    "sql-password": {
+      "type": "parameter.v0",
+      "value": "{sql-password.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string",
+          "secret": true
+        }
+      }
+    },
+    "mongo-password": {
+      "type": "parameter.v0",
+      "value": "{mongo-password.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string",
+          "secret": true
+        }
+      }
+    },
+    "jwt-secret": {
+      "type": "parameter.v0",
+      "value": "{jwt-secret.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string",
+          "secret": true
+        }
+      }
+    },
+    "aggregator-client-secret": {
+      "type": "parameter.v0",
+      "value": "{aggregator-client-secret.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string",
+          "secret": true
+        }
+      }
+    },
+    "seed-admin-username": {
+      "type": "parameter.v0",
+      "value": "{seed-admin-username.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "seed-admin-email": {
+      "type": "parameter.v0",
+      "value": "{seed-admin-email.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "seed-admin-password": {
+      "type": "parameter.v0",
+      "value": "{seed-admin-password.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string",
+          "secret": true
+        }
+      }
+    },
+    "seed-user-username": {
+      "type": "parameter.v0",
+      "value": "{seed-user-username.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "seed-user-email": {
+      "type": "parameter.v0",
+      "value": "{seed-user-email.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "seed-user-password": {
+      "type": "parameter.v0",
+      "value": "{seed-user-password.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string",
+          "secret": true
+        }
+      }
+    },
+    "sql": {
+      "type": "container.v0",
+      "connectionString": "Server={sql.bindings.tcp.host},{sql.bindings.tcp.port};User ID=sa;Password={sql-password.value};TrustServerCertificate=true",
+      "image": "mcr.microsoft.com/mssql/server:2022-latest",
+      "volumes": [
+        {
+          "name": "platform.apphost-04e9402f01-sql-data",
+          "target": "/var/opt/mssql",
+          "readOnly": false
+        }
+      ],
+      "env": {
+        "ACCEPT_EULA": "Y",
+        "MSSQL_SA_PASSWORD": "{sql-password.value}"
+      },
+      "bindings": {
+        "tcp": {
+          "scheme": "tcp",
+          "protocol": "tcp",
+          "transport": "tcp",
+          "port": 14330,
+          "targetPort": 1433
+        }
+      }
+    },
+    "OrdersDb": {
+      "type": "value.v0",
+      "connectionString": "{sql.connectionString};Initial Catalog=GoldenCrust_Orders"
+    },
+    "CatalogDb": {
+      "type": "value.v0",
+      "connectionString": "{sql.connectionString};Initial Catalog=GoldenCrust_Catalog"
+    },
+    "IdentityDb": {
+      "type": "value.v0",
+      "connectionString": "{sql.connectionString};Initial Catalog=GoldenCrust_Identity"
+    },
+    "IdentityServerDb": {
+      "type": "value.v0",
+      "connectionString": "{sql.connectionString};Initial Catalog=GoldenCrust_IdentityServer"
+    },
+    "mongo": {
+      "type": "container.v0",
+      "connectionString": "mongodb://admin:{mongo-password-uri-encoded.value}@{mongo.bindings.tcp.host}:{mongo.bindings.tcp.port}/?authSource=admin\u0026authMechanism=SCRAM-SHA-256{cond-mongo-bindings-tcp-tlsenabled-6a254ce1.connectionString}",
+      "image": "docker.io/library/mongo:8.3",
+      "volumes": [
+        {
+          "name": "platform.apphost-04e9402f01-mongo-data",
+          "target": "/data/db",
+          "readOnly": false
+        }
+      ],
+      "env": {
+        "MONGO_INITDB_ROOT_USERNAME": "admin",
+        "MONGO_INITDB_ROOT_PASSWORD": "{mongo-password.value}"
+      },
+      "bindings": {
+        "tcp": {
+          "scheme": "tcp",
+          "protocol": "tcp",
+          "transport": "tcp",
+          "port": 27018,
+          "targetPort": 27017
+        }
+      }
+    },
+    "ReviewsDb": {
+      "type": "value.v0",
+      "connectionString": "mongodb://admin:{mongo-password-uri-encoded.value}@{mongo.bindings.tcp.host}:{mongo.bindings.tcp.port}/golden_crust_reviews?authSource=admin\u0026authMechanism=SCRAM-SHA-256{cond-mongo-bindings-tcp-tlsenabled-6a254ce1.connectionString}"
+    },
+    "redis": {
+      "type": "container.v0",
+      "connectionString": "{redis.bindings.tcp.host}:{redis.bindings.tcp.port},password={redis-password.value}{cond-redis-bindings-tcp-tlsenabled-d148d83a.connectionString}",
+      "image": "docker.io/library/redis:8.6",
+      "entrypoint": "/bin/sh",
+      "args": [
+        "-c",
+        "redis-server --requirepass $REDIS_PASSWORD --save 60 1"
+      ],
+      "volumes": [
+        {
+          "name": "platform.apphost-04e9402f01-redis-data",
+          "target": "/data",
+          "readOnly": false
+        }
+      ],
+      "env": {
+        "REDIS_PASSWORD": "{redis-password.value}"
+      },
+      "bindings": {
+        "tcp": {
+          "scheme": "redis",
+          "protocol": "tcp",
+          "transport": "tcp",
+          "targetPort": 6379
+        }
+      }
+    },
+    "keycloak": {
+      "type": "container.v0",
+      "image": "quay.io/keycloak/keycloak:26.6",
+      "args": [
+        "start",
+        "--import-realm"
+      ],
+      "volumes": [
+        {
+          "name": "platform.apphost-04e9402f01-keycloak-data",
+          "target": "/opt/keycloak/data",
+          "readOnly": false
+        }
+      ],
+      "env": {
+        "KC_BOOTSTRAP_ADMIN_USERNAME": "admin",
+        "KC_BOOTSTRAP_ADMIN_PASSWORD": "{keycloak-password.value}",
+        "KC_HEALTH_ENABLED": "true",
+        "KC_FEATURES": "opentelemetry"
+      },
+      "bindings": {
+        "http": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http",
+          "targetPort": 8080
+        },
+        "management": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http",
+          "targetPort": 9000
+        }
+      }
+    },
+    "messaging": {
+      "type": "container.v0",
+      "connectionString": "amqp://guest:{messaging-password-uri-encoded.value}@{messaging.bindings.tcp.host}:{messaging.bindings.tcp.port}",
+      "image": "docker.io/library/rabbitmq:4.3-management",
+      "volumes": [
+        {
+          "name": "platform.apphost-04e9402f01-messaging-data",
+          "target": "/var/lib/rabbitmq",
+          "readOnly": false
+        }
+      ],
+      "env": {
+        "RABBITMQ_DEFAULT_USER": "guest",
+        "RABBITMQ_DEFAULT_PASS": "{messaging-password.value}"
+      },
+      "bindings": {
+        "tcp": {
+          "scheme": "tcp",
+          "protocol": "tcp",
+          "transport": "tcp",
+          "targetPort": 5672
+        },
+        "management": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http",
+          "targetPort": 15672
+        }
+      }
+    },
+    "auth-api": {
+      "type": "project.v0",
+      "path": "../Services/Auth/Auth.Api/Auth.Api.csproj",
+      "env": {
+        "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
+        "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
+        "HTTP_PORTS": "{auth-api.bindings.http.targetPort}",
+        "ConnectionStrings__IdentityDb": "{IdentityDb.connectionString}",
+        "IDENTITYDB_HOST": "{sql.bindings.tcp.host}",
+        "IDENTITYDB_PORT": "{sql.bindings.tcp.port}",
+        "IDENTITYDB_USERNAME": "sa",
+        "IDENTITYDB_PASSWORD": "{sql-password.value}",
+        "IDENTITYDB_URI": "mssql://sa:{sql-password.value}@{sql.bindings.tcp.host}:{sql.bindings.tcp.port}/GoldenCrust_Identity",
+        "IDENTITYDB_JDBCCONNECTIONSTRING": "jdbc:sqlserver://{sql.bindings.tcp.host}:{sql.bindings.tcp.port};databaseName=GoldenCrust_Identity;trustServerCertificate=true",
+        "IDENTITYDB_DATABASENAME": "GoldenCrust_Identity",
+        "Jwt__Issuer": "GoldenCrust.Auth",
+        "Jwt__Audience": "GoldenCrust.Api",
+        "Jwt__SecretKey": "{jwt-secret.value}",
+        "SeedAdmin__UserName": "{seed-admin-username.value}",
+        "SeedAdmin__Email": "{seed-admin-email.value}",
+        "SeedAdmin__Password": "{seed-admin-password.value}",
+        "SeedUser__UserName": "{seed-user-username.value}",
+        "SeedUser__Email": "{seed-user-email.value}",
+        "SeedUser__Password": "{seed-user-password.value}"
+      },
+      "bindings": {
+        "http": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http"
+        },
+        "https": {
+          "scheme": "https",
+          "protocol": "tcp",
+          "transport": "http"
+        }
+      }
+    },
+    "identityserver": {
+      "type": "project.v0",
+      "path": "../Platform.IdentityServer/Platform.IdentityServer.csproj",
+      "env": {
+        "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
+        "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
+        "HTTP_PORTS": "{identityserver.bindings.http.targetPort};{identityserver.bindings.public.targetPort}",
+        "ConnectionStrings__IdentityServerDb": "{IdentityServerDb.connectionString}",
+        "IDENTITYSERVERDB_HOST": "{sql.bindings.tcp.host}",
+        "IDENTITYSERVERDB_PORT": "{sql.bindings.tcp.port}",
+        "IDENTITYSERVERDB_USERNAME": "sa",
+        "IDENTITYSERVERDB_PASSWORD": "{sql-password.value}",
+        "IDENTITYSERVERDB_URI": "mssql://sa:{sql-password.value}@{sql.bindings.tcp.host}:{sql.bindings.tcp.port}/GoldenCrust_IdentityServer",
+        "IDENTITYSERVERDB_JDBCCONNECTIONSTRING": "jdbc:sqlserver://{sql.bindings.tcp.host}:{sql.bindings.tcp.port};databaseName=GoldenCrust_IdentityServer;trustServerCertificate=true",
+        "IDENTITYSERVERDB_DATABASENAME": "GoldenCrust_IdentityServer",
+        "Clients__AggregatorSecret": "{aggregator-client-secret.value}",
+        "SeedAdmin__UserName": "{seed-admin-username.value}",
+        "SeedAdmin__Email": "{seed-admin-email.value}",
+        "SeedAdmin__Password": "{seed-admin-password.value}",
+        "SeedUser__UserName": "{seed-user-username.value}",
+        "SeedUser__Email": "{seed-user-email.value}",
+        "SeedUser__Password": "{seed-user-password.value}"
+      },
+      "bindings": {
+        "http": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http"
+        },
+        "https": {
+          "scheme": "https",
+          "protocol": "tcp",
+          "transport": "http"
+        },
+        "public": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http",
+          "port": 5100,
+          "targetPort": 8000
+        }
+      }
+    },
+    "orders-api": {
+      "type": "project.v0",
+      "path": "../Services/Orders/Orders.Api/Orders.Api.csproj",
+      "env": {
+        "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
+        "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
+        "HTTP_PORTS": "{orders-api.bindings.http.targetPort}",
+        "ConnectionStrings__OrdersDb": "{OrdersDb.connectionString}",
+        "ORDERSDB_HOST": "{sql.bindings.tcp.host}",
+        "ORDERSDB_PORT": "{sql.bindings.tcp.port}",
+        "ORDERSDB_USERNAME": "sa",
+        "ORDERSDB_PASSWORD": "{sql-password.value}",
+        "ORDERSDB_URI": "mssql://sa:{sql-password.value}@{sql.bindings.tcp.host}:{sql.bindings.tcp.port}/GoldenCrust_Orders",
+        "ORDERSDB_JDBCCONNECTIONSTRING": "jdbc:sqlserver://{sql.bindings.tcp.host}:{sql.bindings.tcp.port};databaseName=GoldenCrust_Orders;trustServerCertificate=true",
+        "ORDERSDB_DATABASENAME": "GoldenCrust_Orders",
+        "ConnectionStrings__messaging": "{messaging.connectionString}",
+        "MESSAGING_HOST": "{messaging.bindings.tcp.host}",
+        "MESSAGING_PORT": "{messaging.bindings.tcp.port}",
+        "MESSAGING_USERNAME": "guest",
+        "MESSAGING_PASSWORD": "{messaging-password.value}",
+        "MESSAGING_URI": "amqp://guest:{messaging-password-uri-encoded.value}@{messaging.bindings.tcp.host}:{messaging.bindings.tcp.port}",
+        "KEYCLOAK_HTTP": "{keycloak.bindings.http.url}",
+        "services__keycloak__http__0": "{keycloak.bindings.http.url}",
+        "IDENTITYSERVER_HTTP": "{identityserver.bindings.http.url}",
+        "services__identityserver__http__0": "{identityserver.bindings.http.url}",
+        "IDENTITYSERVER_HTTPS": "{identityserver.bindings.https.url}",
+        "services__identityserver__https__0": "{identityserver.bindings.https.url}",
+        "IDENTITYSERVER_PUBLIC": "{identityserver.bindings.public.url}",
+        "services__identityserver__public__0": "{identityserver.bindings.public.url}",
+        "IdentityServer__Authority": "{identityserver.bindings.public.url}",
+        "IdentityServer__Issuer": "http://localhost:5100",
+        "Jwt__Issuer": "GoldenCrust.Auth",
+        "Jwt__Audience": "GoldenCrust.Api",
+        "Jwt__SecretKey": "{jwt-secret.value}"
+      },
+      "bindings": {
+        "http": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http"
+        },
+        "https": {
+          "scheme": "https",
+          "protocol": "tcp",
+          "transport": "http"
+        }
+      }
+    },
+    "catalog-api": {
+      "type": "project.v0",
+      "path": "../Services/Catalog/Catalog.Api/Catalog.Api.csproj",
+      "env": {
+        "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
+        "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
+        "HTTP_PORTS": "{catalog-api.bindings.http.targetPort}",
+        "ConnectionStrings__CatalogDb": "{CatalogDb.connectionString}",
+        "CATALOGDB_HOST": "{sql.bindings.tcp.host}",
+        "CATALOGDB_PORT": "{sql.bindings.tcp.port}",
+        "CATALOGDB_USERNAME": "sa",
+        "CATALOGDB_PASSWORD": "{sql-password.value}",
+        "CATALOGDB_URI": "mssql://sa:{sql-password.value}@{sql.bindings.tcp.host}:{sql.bindings.tcp.port}/GoldenCrust_Catalog",
+        "CATALOGDB_JDBCCONNECTIONSTRING": "jdbc:sqlserver://{sql.bindings.tcp.host}:{sql.bindings.tcp.port};databaseName=GoldenCrust_Catalog;trustServerCertificate=true",
+        "CATALOGDB_DATABASENAME": "GoldenCrust_Catalog",
+        "ConnectionStrings__redis": "{redis.connectionString}",
+        "REDIS_HOST": "{redis.bindings.tcp.host}",
+        "REDIS_PORT": "{redis.bindings.tcp.port}",
+        "REDIS_PASSWORD": "{redis-password.value}",
+        "REDIS_URI": "{redis.bindings.tcp.scheme}://:{redis-password-uri-encoded.value}@{redis.bindings.tcp.host}:{redis.bindings.tcp.port}",
+        "ConnectionStrings__messaging": "{messaging.connectionString}",
+        "MESSAGING_HOST": "{messaging.bindings.tcp.host}",
+        "MESSAGING_PORT": "{messaging.bindings.tcp.port}",
+        "MESSAGING_USERNAME": "guest",
+        "MESSAGING_PASSWORD": "{messaging-password.value}",
+        "MESSAGING_URI": "amqp://guest:{messaging-password-uri-encoded.value}@{messaging.bindings.tcp.host}:{messaging.bindings.tcp.port}",
+        "KEYCLOAK_HTTP": "{keycloak.bindings.http.url}",
+        "services__keycloak__http__0": "{keycloak.bindings.http.url}",
+        "IDENTITYSERVER_HTTP": "{identityserver.bindings.http.url}",
+        "services__identityserver__http__0": "{identityserver.bindings.http.url}",
+        "IDENTITYSERVER_HTTPS": "{identityserver.bindings.https.url}",
+        "services__identityserver__https__0": "{identityserver.bindings.https.url}",
+        "IDENTITYSERVER_PUBLIC": "{identityserver.bindings.public.url}",
+        "services__identityserver__public__0": "{identityserver.bindings.public.url}",
+        "IdentityServer__Authority": "{identityserver.bindings.public.url}",
+        "IdentityServer__Issuer": "http://localhost:5100",
+        "Jwt__Issuer": "GoldenCrust.Auth",
+        "Jwt__Audience": "GoldenCrust.Api",
+        "Jwt__SecretKey": "{jwt-secret.value}"
+      },
+      "bindings": {
+        "http": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http"
+        },
+        "https": {
+          "scheme": "https",
+          "protocol": "tcp",
+          "transport": "http"
+        }
+      }
+    },
+    "reviews-api": {
+      "type": "project.v0",
+      "path": "../Services/Reviews/Reviews.WebApi/Reviews.WebApi.csproj",
+      "env": {
+        "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
+        "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
+        "HTTP_PORTS": "{reviews-api.bindings.http.targetPort}",
+        "ConnectionStrings__ReviewsDb": "{ReviewsDb.connectionString}",
+        "REVIEWSDB_HOST": "{mongo.bindings.tcp.host}",
+        "REVIEWSDB_PORT": "{mongo.bindings.tcp.port}",
+        "REVIEWSDB_USERNAME": "admin",
+        "REVIEWSDB_PASSWORD": "{mongo-password.value}",
+        "REVIEWSDB_AUTHENTICATIONDATABASE": "admin",
+        "REVIEWSDB_AUTHENTICATIONMECHANISM": "SCRAM-SHA-256",
+        "REVIEWSDB_URI": "mongodb://admin:{mongo-password-uri-encoded.value}@{mongo.bindings.tcp.host}:{mongo.bindings.tcp.port}/golden_crust_reviews?authSource=admin\u0026authMechanism=SCRAM-SHA-256{cond-mongo-bindings-tcp-tlsenabled-6a254ce1.connectionString}",
+        "REVIEWSDB_DATABASENAME": "golden_crust_reviews",
+        "ConnectionStrings__redis": "{redis.connectionString}",
+        "REDIS_HOST": "{redis.bindings.tcp.host}",
+        "REDIS_PORT": "{redis.bindings.tcp.port}",
+        "REDIS_PASSWORD": "{redis-password.value}",
+        "REDIS_URI": "{redis.bindings.tcp.scheme}://:{redis-password-uri-encoded.value}@{redis.bindings.tcp.host}:{redis.bindings.tcp.port}",
+        "ConnectionStrings__messaging": "{messaging.connectionString}",
+        "MESSAGING_HOST": "{messaging.bindings.tcp.host}",
+        "MESSAGING_PORT": "{messaging.bindings.tcp.port}",
+        "MESSAGING_USERNAME": "guest",
+        "MESSAGING_PASSWORD": "{messaging-password.value}",
+        "MESSAGING_URI": "amqp://guest:{messaging-password-uri-encoded.value}@{messaging.bindings.tcp.host}:{messaging.bindings.tcp.port}",
+        "IDENTITYSERVER_HTTP": "{identityserver.bindings.http.url}",
+        "services__identityserver__http__0": "{identityserver.bindings.http.url}",
+        "IDENTITYSERVER_HTTPS": "{identityserver.bindings.https.url}",
+        "services__identityserver__https__0": "{identityserver.bindings.https.url}",
+        "IDENTITYSERVER_PUBLIC": "{identityserver.bindings.public.url}",
+        "services__identityserver__public__0": "{identityserver.bindings.public.url}",
+        "IdentityServer__Authority": "{identityserver.bindings.public.url}",
+        "IdentityServer__Issuer": "http://localhost:5100",
+        "Jwt__Issuer": "GoldenCrust.Auth",
+        "Jwt__Audience": "GoldenCrust.Api",
+        "Jwt__SecretKey": "{jwt-secret.value}"
+      },
+      "bindings": {
+        "http": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http"
+        },
+        "https": {
+          "scheme": "https",
+          "protocol": "tcp",
+          "transport": "http"
+        }
+      }
+    },
+    "payments-api": {
+      "type": "project.v0",
+      "path": "../Services/Payments/Payments.Api/Payments.Api.csproj",
+      "env": {
+        "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
+        "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
+        "HTTP_PORTS": "{payments-api.bindings.http.targetPort}",
+        "KEYCLOAK_HTTP": "{keycloak.bindings.http.url}",
+        "services__keycloak__http__0": "{keycloak.bindings.http.url}",
+        "IDENTITYSERVER_HTTP": "{identityserver.bindings.http.url}",
+        "services__identityserver__http__0": "{identityserver.bindings.http.url}",
+        "IDENTITYSERVER_HTTPS": "{identityserver.bindings.https.url}",
+        "services__identityserver__https__0": "{identityserver.bindings.https.url}",
+        "IDENTITYSERVER_PUBLIC": "{identityserver.bindings.public.url}",
+        "services__identityserver__public__0": "{identityserver.bindings.public.url}",
+        "IdentityServer__Authority": "{identityserver.bindings.public.url}",
+        "IdentityServer__Issuer": "http://localhost:5100",
+        "Jwt__Issuer": "GoldenCrust.Auth",
+        "Jwt__Audience": "GoldenCrust.Api",
+        "Jwt__SecretKey": "{jwt-secret.value}"
+      },
+      "bindings": {
+        "http": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http"
+        },
+        "https": {
+          "scheme": "https",
+          "protocol": "tcp",
+          "transport": "http"
+        }
+      }
+    },
+    "aggregator": {
+      "type": "project.v0",
+      "path": "../Platform.Aggregator/Platform.Aggregator.csproj",
+      "env": {
+        "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
+        "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
+        "HTTP_PORTS": "{aggregator.bindings.http.targetPort}",
+        "ORDERS_API_HTTP": "{orders-api.bindings.http.url}",
+        "services__orders-api__http__0": "{orders-api.bindings.http.url}",
+        "ORDERS_API_HTTPS": "{orders-api.bindings.https.url}",
+        "services__orders-api__https__0": "{orders-api.bindings.https.url}",
+        "CATALOG_API_HTTP": "{catalog-api.bindings.http.url}",
+        "services__catalog-api__http__0": "{catalog-api.bindings.http.url}",
+        "CATALOG_API_HTTPS": "{catalog-api.bindings.https.url}",
+        "services__catalog-api__https__0": "{catalog-api.bindings.https.url}",
+        "REVIEWS_API_HTTP": "{reviews-api.bindings.http.url}",
+        "services__reviews-api__http__0": "{reviews-api.bindings.http.url}",
+        "REVIEWS_API_HTTPS": "{reviews-api.bindings.https.url}",
+        "services__reviews-api__https__0": "{reviews-api.bindings.https.url}",
+        "ConnectionStrings__redis": "{redis.connectionString}",
+        "REDIS_HOST": "{redis.bindings.tcp.host}",
+        "REDIS_PORT": "{redis.bindings.tcp.port}",
+        "REDIS_PASSWORD": "{redis-password.value}",
+        "REDIS_URI": "{redis.bindings.tcp.scheme}://:{redis-password-uri-encoded.value}@{redis.bindings.tcp.host}:{redis.bindings.tcp.port}",
+        "IDENTITYSERVER_HTTP": "{identityserver.bindings.http.url}",
+        "services__identityserver__http__0": "{identityserver.bindings.http.url}",
+        "IDENTITYSERVER_HTTPS": "{identityserver.bindings.https.url}",
+        "services__identityserver__https__0": "{identityserver.bindings.https.url}",
+        "IDENTITYSERVER_PUBLIC": "{identityserver.bindings.public.url}",
+        "services__identityserver__public__0": "{identityserver.bindings.public.url}",
+        "IdentityServer__Authority": "{identityserver.bindings.public.url}",
+        "IdentityServer__ClientId": "aggregator_service",
+        "IdentityServer__ClientSecret": "{aggregator-client-secret.value}",
+        "IdentityServer__Scopes": "orders_api orders.read products_api products.read reviews_api reviews.read",
+        "Jwt__Issuer": "GoldenCrust.Auth",
+        "Jwt__Audience": "GoldenCrust.Api",
+        "Jwt__SecretKey": "{jwt-secret.value}"
+      },
+      "bindings": {
+        "http": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http"
+        },
+        "https": {
+          "scheme": "https",
+          "protocol": "tcp",
+          "transport": "http"
+        }
+      }
+    },
+    "gateway": {
+      "type": "project.v0",
+      "path": "../Platform.ApiGateway/Platform.ApiGateway.csproj",
+      "env": {
+        "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
+        "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
+        "HTTP_PORTS": "{gateway.bindings.http.targetPort};{gateway.bindings.public.targetPort}",
+        "ORDERS_API_HTTP": "{orders-api.bindings.http.url}",
+        "services__orders-api__http__0": "{orders-api.bindings.http.url}",
+        "ORDERS_API_HTTPS": "{orders-api.bindings.https.url}",
+        "services__orders-api__https__0": "{orders-api.bindings.https.url}",
+        "CATALOG_API_HTTP": "{catalog-api.bindings.http.url}",
+        "services__catalog-api__http__0": "{catalog-api.bindings.http.url}",
+        "CATALOG_API_HTTPS": "{catalog-api.bindings.https.url}",
+        "services__catalog-api__https__0": "{catalog-api.bindings.https.url}",
+        "REVIEWS_API_HTTP": "{reviews-api.bindings.http.url}",
+        "services__reviews-api__http__0": "{reviews-api.bindings.http.url}",
+        "REVIEWS_API_HTTPS": "{reviews-api.bindings.https.url}",
+        "services__reviews-api__https__0": "{reviews-api.bindings.https.url}",
+        "AGGREGATOR_HTTP": "{aggregator.bindings.http.url}",
+        "services__aggregator__http__0": "{aggregator.bindings.http.url}",
+        "AGGREGATOR_HTTPS": "{aggregator.bindings.https.url}",
+        "services__aggregator__https__0": "{aggregator.bindings.https.url}",
+        "AUTH_API_HTTP": "{auth-api.bindings.http.url}",
+        "services__auth-api__http__0": "{auth-api.bindings.http.url}",
+        "AUTH_API_HTTPS": "{auth-api.bindings.https.url}",
+        "services__auth-api__https__0": "{auth-api.bindings.https.url}",
+        "IDENTITYSERVER_HTTP": "{identityserver.bindings.http.url}",
+        "services__identityserver__http__0": "{identityserver.bindings.http.url}",
+        "IDENTITYSERVER_HTTPS": "{identityserver.bindings.https.url}",
+        "services__identityserver__https__0": "{identityserver.bindings.https.url}",
+        "IDENTITYSERVER_PUBLIC": "{identityserver.bindings.public.url}",
+        "services__identityserver__public__0": "{identityserver.bindings.public.url}",
+        "KEYCLOAK_HTTP": "{keycloak.bindings.http.url}",
+        "services__keycloak__http__0": "{keycloak.bindings.http.url}",
+        "PAYMENTS_API_HTTP": "{payments-api.bindings.http.url}",
+        "services__payments-api__http__0": "{payments-api.bindings.http.url}",
+        "PAYMENTS_API_HTTPS": "{payments-api.bindings.https.url}",
+        "services__payments-api__https__0": "{payments-api.bindings.https.url}",
+        "IdentityServer__Authority": "{identityserver.bindings.public.url}",
+        "IdentityServer__Issuer": "http://localhost:5100",
+        "Jwt__Issuer": "GoldenCrust.Auth",
+        "Jwt__Audience": "GoldenCrust.Api",
+        "Jwt__SecretKey": "{jwt-secret.value}"
+      },
+      "bindings": {
+        "http": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http"
+        },
+        "https": {
+          "scheme": "https",
+          "protocol": "tcp",
+          "transport": "http"
+        },
+        "public": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http",
+          "port": 5000,
+          "targetPort": 8001
+        }
+      }
+    },
+    "redis-password": {
+      "type": "parameter.v0",
+      "value": "{redis-password.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string",
+          "secret": true,
+          "default": {
+            "generate": {
+              "minLength": 22,
+              "special": false
+            }
+          }
+        }
+      }
+    },
+    "redis-password-uri-encoded": {
+      "type": "annotated.string",
+      "value": "{redis-password.value}",
+      "filter": "uri"
+    },
+    "keycloak-password": {
+      "type": "parameter.v0",
+      "value": "{keycloak-password.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string",
+          "secret": true,
+          "default": {
+            "generate": {
+              "minLength": 22
+            }
+          }
+        }
+      }
+    },
+    "messaging-password": {
+      "type": "parameter.v0",
+      "value": "{messaging-password.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string",
+          "secret": true,
+          "default": {
+            "generate": {
+              "minLength": 22,
+              "special": false
+            }
+          }
+        }
+      }
+    },
+    "messaging-password-uri-encoded": {
+      "type": "annotated.string",
+      "value": "{messaging-password.value}",
+      "filter": "uri"
+    },
+    "mongo-password-uri-encoded": {
+      "type": "annotated.string",
+      "value": "{mongo-password.value}",
+      "filter": "uri"
+    },
+    "sql-password-uri-encoded": {
+      "type": "annotated.string",
+      "value": "{sql-password.value}",
+      "filter": "uri"
+    },
+    "cond-mongo-bindings-tcp-tlsenabled-6a254ce1": {
+      "type": "value.v0",
+      "connectionString": ""
+    },
+    "cond-redis-bindings-tcp-tlsenabled-d148d83a": {
+      "type": "value.v0",
+      "connectionString": ""
+    }
+  }
+}

@@ -1,0 +1,101 @@
+{
+  "projectPath": ".",
+  "inputPath": "aspirate-output",
+  "outputPath": "aspirate-output",
+  "containerImageTags": [
+    "latest"
+  ],
+  "imagePullPolicy": "IfNotPresent",
+  "containerBuilder": "docker",
+  "kubeContext": "docker-desktop",
+  "outputFormat": "kustomize",
+  "skipFinalKustomizeGeneration": false,
+  "privateRegistryEmail": "aspir8@aka.ms",
+  "includeDashboard": true,
+  "useCustomNamespace": false,
+  "secrets": {
+    "salt": "kgu\u002B\u002B24\u002BOqBZmY2A",
+    "hash": "J4UoRl\u002Bik/O3jvsxk57XQbhFcytO0H1livbLDGNKTPQ=",
+    "secrets": {
+      "redis-password": {
+        "value": "kgu\u002B\u002B24\u002BOqBZmY2AbpjFin9xoEpkc7yRLPiHyR0yXVkkIhgOqoJuMSYKAqtsr4DX5RA="
+      },
+      "keycloak-password": {
+        "value": "kgu\u002B\u002B24\u002BOqBZmY2AQBGnWEMSmjUoGlpXCUY3G3gEeWNeeik20b93BCA6YLZm4pzvwRU="
+      },
+      "messaging-password": {
+        "value": "kgu\u002B\u002B24\u002BOqBZmY2AbPElICLOKvV3\u002BYQsu80Ga2UVTkwEKCZtgPxiAR8bP6l1trTL/iQ="
+      },
+      "sql-password": {
+        "value": "kgu\u002B\u002B24\u002BOqBZmY2ABMMHWQOOPe1GySyz8/TAXHwwRFA6Kz0o0PsWGA=="
+      },
+      "mongo-password": {
+        "value": "kgu\u002B\u002B24\u002BOqBZmY2AkEvPKT1xP0lv1ZamBJp6vkIuRmgFZz46krpSDyY5"
+      },
+      "jwt-secret": {
+        "value": "kgu\u002B\u002B24\u002BOqBZmY2A7Mudc0/bgDjf4tRhnoIm\u002Blw0WGoYZz0vk6ZLB3k3L7R55J3v7SVgAFAohIhg3Q7YrBh5ibcptZAjxT7HgUvdFYuuEX0f8cEg"
+      },
+      "aggregator-client-secret": {
+        "value": "kgu\u002B\u002B24\u002BOqBZmY2ALnFXEhveShFPIrR9On0ak04mT30PLS8vjrsIAzg0Pa4guov47SVgAA=="
+      },
+      "seed-admin-username": {
+        "value": "kgu\u002B\u002B24\u002BOqBZmY2A37J1UwucE79/1otDrP3Vx04lRWYE"
+      },
+      "seed-admin-email": {
+        "value": "kgu\u002B\u002B24\u002BOqBZmY2ACGubb/jue5g8YbAdtl0QdU4lRWYECis2gKBJTjcyNQ=="
+      },
+      "seed-admin-password": {
+        "value": "kgu\u002B\u002B24\u002BOqBZmY2ADXBv8u46/sAubRvqk3u4ak4lRWYEe3xo"
+      },
+      "seed-user-username": {
+        "value": "kgu\u002B\u002B24\u002BOqBZmY2Am37Is07yphzMe6wgYPqss1skW3sfOSsp"
+      },
+      "seed-user-email": {
+        "value": "kgu\u002B\u002B24\u002BOqBZmY2AfcOq91uquOkke\u002BWejmULdVoyTX0qLyM6iKULAzsw"
+      },
+      "seed-user-password": {
+        "value": "kgu\u002B\u002B24\u002BOqBZmY2A90l21nPljB5t6RgEqQyDQ1oyTX1beH0="
+      },
+      "sql": {
+        "MSSQL_SA_PASSWORD": "kgu\u002B\u002B24\u002BOqBZmY2ABMMHWQOOPe1GySyz8/TAXHwwRFA6Kz0o0PsWGA=="
+      },
+      "OrdersDb": {},
+      "CatalogDb": {},
+      "IdentityDb": {},
+      "IdentityServerDb": {},
+      "mongo": {},
+      "ReviewsDb": {},
+      "redis": {},
+      "keycloak": {},
+      "messaging": {},
+      "auth-api": {
+        "ConnectionStrings__IdentityDb": "kgu\u002B\u002B24\u002BOqBZmY2Ae9bqyEeVSBcxiyikdkVgCHwkWnkPOHMokKUJUWBua/Bvwov4/HdMMEAsjMdYkU6Z9gRygOgVqI9R8zDG3x2ASpfwK2wY98YHiXUTUVtyaal3IF4ULP/zqX0hI1lZRMn29RwVKy6JLS8LdwwhzXhtjok/6pdJrIYGdQoGgCw6BqYHkw=="
+      },
+      "identityserver": {
+        "ConnectionStrings__IdentityServerDb": "kgu\u002B\u002B24\u002BOqBZmY2A\u002BTSDKCrQhu9RnGa4TqHxBXwkWnkPOHMokKUJUWBua/Bvwov4/HdMMEAsjMdYkU6Z9gRygOgVqI9R8zDG3x2ASpfwK2wY98YHiXUTUVtyaal3IF4ULP/zqX0hI1lZRMn29RwVKy6JLS8LdwwhzXhtjok/6pdJrIYGdQoGgCw6BqYHk/5FsnDZLw=="
+      },
+      "orders-api": {
+        "ConnectionStrings__OrdersDb": "kgu\u002B\u002B24\u002BOqBZmY2AmYr6htBxK0yoVpFSj0ifLHwkWnkPOHMokKUJUWBua/Bvwov4/HdMMEAsjMdYkU6Z9gRygOgVqI9R8zDG3x2ASpfwK2wY98YHiXUTUVtyaal3IF4ULP/zqX0hI1lZRMn29RwVKy6JLS8LdwwhzXhtjok/6pdJrIYGdQoAli0xALw=",
+        "ConnectionStrings__messaging": "kgu\u002B\u002B24\u002BOqBZmY2AqsesVxJnueXuoqUsTi6cRk4sWX9QZWE8lKxWFG4mNaUn5Jn65zliWQ0\u002Bno9/n0\u002BOrB5yjfgjt4BhxzTRglrTFZquAl4A4cEnjWAMWk4LOe00ew=="
+      },
+      "catalog-api": {
+        "ConnectionStrings__CatalogDb": "kgu\u002B\u002B24\u002BOqBZmY2Al/WhiARsNb\u002B4nVo0Ovf\u002BPHwkWnkPOHMokKUJUWBua/Bvwov4/HdMMEAsjMdYkU6Z9gRygOgVqI9R8zDG3x2ASpfwK2wY98YHiXUTUVtyaal3IF4ULP/zqX0hI1lZRMn29RwVKy6JLS8LdwwhzXhtjok/6pdJrIYGdQoMhT01HqAU",
+        "ConnectionStrings__redis": "kgu\u002B\u002B24\u002BOqBZmY2AEULpso8TAty35ira/5SbBV0kTGYZcHho1vAJEDUuK7c75ZygvCRwIjM3u6lDu3a78zxaj\u002B1\u002Boall5A==",
+        "ConnectionStrings__messaging": "kgu\u002B\u002B24\u002BOqBZmY2AqsesVxJnueXuoqUsTi6cRk4sWX9QZWE8lKxWFG4mNaUn5Jn65zliWQ0\u002Bno9/n0\u002BOrB5yjfgjt4BhxzTRglrTFZquAl4A4cEnjWAMWk4LOe00ew=="
+      },
+      "reviews-api": {
+        "ConnectionStrings__ReviewsDb": "kgu\u002B\u002B24\u002BOqBZmY2ASyhnl2s0CtTOyCYiHulf6UIuRmgFLixhzuZEBDk0Nvov\u002Bpfz6TgoBBwsnotnglnH9BlpybAouoxqxjWb2k3eDIq2P3MC6tU71jVSBBgJI7xsJVwYIcHkvjUmJXNOGvbx\u002BR8PdSPcGiYseRU8ySAXgIE25pcsv4YBaRgqhyE1HKYAh5Bzg1T9EIOHqBQ7FlcL",
+        "ConnectionStrings__redis": "kgu\u002B\u002B24\u002BOqBZmY2AEULpso8TAty35ira/5SbBV0kTGYZcHho1vAJEDUuK7c75ZygvCRwIjM3u6lDu3a78zxaj\u002B1\u002Boall5A==",
+        "ConnectionStrings__messaging": "kgu\u002B\u002B24\u002BOqBZmY2AqsesVxJnueXuoqUsTi6cRk4sWX9QZWE8lKxWFG4mNaUn5Jn65zliWQ0\u002Bno9/n0\u002BOrB5yjfgjt4BhxzTRglrTFZquAl4A4cEnjWAMWk4LOe00ew=="
+      },
+      "payments-api": {},
+      "aggregator": {
+        "ConnectionStrings__redis": "kgu\u002B\u002B24\u002BOqBZmY2AEULpso8TAty35ira/5SbBV0kTGYZcHho1vAJEDUuK7c75ZygvCRwIjM3u6lDu3a78zxaj\u002B1\u002Boall5A=="
+      },
+      "gateway": {},
+      "cond-mongo-bindings-tcp-tlsenabled-6a254ce1": {},
+      "cond-redis-bindings-tcp-tlsenabled-d148d83a": {}
+    }
+  },
+  "processAllComponents": true
+}

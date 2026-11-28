@@ -1,0 +1,20 @@
+resources:
+- sql
+- mongo
+- redis
+- keycloak
+- messaging
+- auth-api
+- identityserver
+- orders-api
+- catalog-api
+- reviews-api
+- payments-api
+- aggregator
+- gateway
+- dashboard.yaml
+
+generatorOptions:
+  disableNameSuffixHash: true
+
+

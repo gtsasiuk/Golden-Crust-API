@@ -1,0 +1,44 @@
+resources:
+- deployment.yaml
+- service.yaml
+
+generatorOptions:
+  disableNameSuffixHash: true
+
+configMapGenerator:
+- name: orders-api-env
+  literals:
+    - OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY=in_memory
+    - ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
+    - HTTP_PORTS=8080
+    - ORDERSDB_HOST=sql
+    - ORDERSDB_PORT=14330
+    - ORDERSDB_USERNAME=sa
+    - ORDERSDB_PASSWORD=Sql_Pass123x
+    - ORDERSDB_URI=mssql://sa:Sql_Pass123x@sql:14330/GoldenCrust_Orders
+    - ORDERSDB_JDBCCONNECTIONSTRING=jdbc:sqlserver://sql:14330;databaseName=GoldenCrust_Orders;trustServerCertificate=true
+    - ORDERSDB_DATABASENAME=GoldenCrust_Orders
+    - MESSAGING_HOST=messaging
+    - MESSAGING_PORT=5672
+    - MESSAGING_USERNAME=guest
+    - MESSAGING_PASSWORD=JTfCnbh6a5GaKFgi!!LVps
+    - MESSAGING_URI=amqp://guest:{messaging-password-uri-encoded.value}@messaging:5672
+    - KEYCLOAK_HTTP=http://keycloak:8080
+    - services__keycloak__http__0=http://keycloak:8080
+    - IDENTITYSERVER_HTTP=http://identityserver:8080
+    - services__identityserver__http__0=http://identityserver:8080
+    - IDENTITYSERVER_PUBLIC=identityserver:8000
+    - services__identityserver__public__0=identityserver:8000
+    - IdentityServer__Authority=identityserver:8000
+    - IdentityServer__Issuer=http://localhost:5100
+    - Jwt__Issuer=GoldenCrust.Auth
+    - Jwt__Audience=GoldenCrust.Api
+    - Jwt__SecretKey=super-strong-jwt-sercret-with-32-symbols-for-goldencrust
+    - OTEL_EXPORTER_OTLP_ENDPOINT=http://aspire-dashboard:18889
+    - OTEL_SERVICE_NAME=orders-api
+    - ASPNETCORE_URLS=http://+:8080;
+
+secretGenerator:
+- name: orders-api-secrets
+  envs:
+  - .orders-api.secrets

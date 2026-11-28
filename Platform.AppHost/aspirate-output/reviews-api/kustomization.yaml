@@ -1,0 +1,47 @@
+resources:
+- deployment.yaml
+- service.yaml
+
+generatorOptions:
+  disableNameSuffixHash: true
+
+configMapGenerator:
+- name: reviews-api-env
+  literals:
+    - OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY=in_memory
+    - ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
+    - HTTP_PORTS=8080
+    - REVIEWSDB_HOST=mongo
+    - REVIEWSDB_PORT=27018
+    - REVIEWSDB_USERNAME=admin
+    - REVIEWSDB_PASSWORD=mongo-password
+    - REVIEWSDB_AUTHENTICATIONDATABASE=admin
+    - REVIEWSDB_AUTHENTICATIONMECHANISM=SCRAM-SHA-256
+    - REVIEWSDB_URI=mongodb://admin:{mongo-password-uri-encoded.value}@mongo:27018/golden_crust_reviews?authSource=admin&amp;authMechanism=SCRAM-SHA-256
+    - REVIEWSDB_DATABASENAME=golden_crust_reviews
+    - REDIS_HOST=redis
+    - REDIS_PORT=6379
+    - REDIS_PASSWORD=2suVNhVUKKKQrWZk88xJkG
+    - REDIS_URI=http://:{redis-password-uri-encoded.value}@redis:6379
+    - MESSAGING_HOST=messaging
+    - MESSAGING_PORT=5672
+    - MESSAGING_USERNAME=guest
+    - MESSAGING_PASSWORD=JTfCnbh6a5GaKFgi!!LVps
+    - MESSAGING_URI=amqp://guest:{messaging-password-uri-encoded.value}@messaging:5672
+    - IDENTITYSERVER_HTTP=http://identityserver:8080
+    - services__identityserver__http__0=http://identityserver:8080
+    - IDENTITYSERVER_PUBLIC=identityserver:8000
+    - services__identityserver__public__0=identityserver:8000
+    - IdentityServer__Authority=identityserver:8000
+    - IdentityServer__Issuer=http://localhost:5100
+    - Jwt__Issuer=GoldenCrust.Auth
+    - Jwt__Audience=GoldenCrust.Api
+    - Jwt__SecretKey=super-strong-jwt-sercret-with-32-symbols-for-goldencrust
+    - OTEL_EXPORTER_OTLP_ENDPOINT=http://aspire-dashboard:18889
+    - OTEL_SERVICE_NAME=reviews-api
+    - ASPNETCORE_URLS=http://+:8080;
+
+secretGenerator:
+- name: reviews-api-secrets
+  envs:
+  - .reviews-api.secrets
