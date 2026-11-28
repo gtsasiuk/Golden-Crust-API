@@ -7,6 +7,7 @@ namespace Orders.Api.Security;
 
 public interface IAccessGuard
 {
+    void EnsureCanManageAll(ClaimsPrincipal user);
     Task EnsureCustomerAccessAsync(ClaimsPrincipal user, long customerId, CancellationToken ct);
     Task EnsureOrderAccessAsync(ClaimsPrincipal user, long orderId, CancellationToken ct);
     void EnsureOwnEmail(ClaimsPrincipal user, string email);
@@ -15,6 +16,12 @@ public interface IAccessGuard
 public sealed class AccessGuard(ICustomerService customers, IOrderService orders) : IAccessGuard
 {
     private const string Denied = "You can only access your own data";
+
+    public void EnsureCanManageAll(ClaimsPrincipal user)
+    {
+        if (!user.IsAdmin())
+            throw new ForbiddenException("Only administrators can manage all customers");
+    }
 
     public async Task EnsureCustomerAccessAsync(ClaimsPrincipal user, long customerId, CancellationToken ct)
     {
@@ -25,7 +32,7 @@ public sealed class AccessGuard(ICustomerService customers, IOrderService orders
             var customer = await customers.GetByIdAsync(customerId, ct);
             if (IsSameEmail(customer.Email, user)) return;
         }
-        catch (NotFoundException) {  }
+        catch (NotFoundException) { }
 
         throw new ForbiddenException(Denied);
     }
@@ -40,7 +47,7 @@ public sealed class AccessGuard(ICustomerService customers, IOrderService orders
             await EnsureCustomerAccessAsync(user, order.CustomerId, ct);
             return;
         }
-        catch (NotFoundException) {  }
+        catch (NotFoundException) { }
 
         throw new ForbiddenException(Denied);
     }

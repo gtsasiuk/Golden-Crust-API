@@ -20,7 +20,6 @@ public class ReviewsController : ApiControllerBase
 {
     [HttpGet]
     [AllowAnonymous]
-    [Authorize(Policy = "reviews.read")]
     [ProducesResponseType(typeof(PagedResult<ReviewDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<PagedResult<ReviewDto>>> GetList(
@@ -32,7 +31,6 @@ public class ReviewsController : ApiControllerBase
 
     [HttpGet("{id}")]
     [AllowAnonymous]
-    [Authorize(Policy = "reviews.read")]
     [ProducesResponseType(typeof(ReviewDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
@@ -44,7 +42,7 @@ public class ReviewsController : ApiControllerBase
     }
 
     [HttpPost]
-    [Authorize(Policy = "reviews.write")]
+    [RequirePermission(Permissions.ReviewsWrite)]
     [ProducesResponseType(typeof(CreatedReviewResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
@@ -59,7 +57,7 @@ public class ReviewsController : ApiControllerBase
     }
 
     [HttpPut("{id}")]
-    [Authorize(Policy = "reviews.write")]
+    [RequirePermission(Permissions.ReviewsWrite)]
     [ProducesResponseType(typeof(ReviewDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
@@ -88,7 +86,7 @@ public class ReviewsController : ApiControllerBase
     }
 
     [HttpDelete("{id}")]
-    [Authorize(Policy = "reviews.write")]
+    [RequirePermission(Permissions.ReviewsWrite)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
@@ -103,7 +101,7 @@ public class ReviewsController : ApiControllerBase
     }
 
     [HttpPost("{id}/comments")]
-    [Authorize(Policy = "reviews.write")]
+    [RequirePermission(Permissions.ReviewsWrite)]
     [ProducesResponseType(typeof(ReviewDto), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]

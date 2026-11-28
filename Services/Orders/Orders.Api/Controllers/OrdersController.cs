@@ -1,5 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Orders.Api.Security;
 using Orders.Bll.Dtos;
 using Orders.Bll.Services;
@@ -9,7 +8,6 @@ namespace Orders.Api.Controllers;
 
 [ApiController]
 [Route("api/orders")]
-[Authorize]
 [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
 [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
 [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
@@ -66,7 +64,6 @@ public class OrdersController(IOrderService orders, IAccessGuard guard, IWebHost
 
     // Кухонні статуси змінює лише Admin (ролі "кухар" поки немає)
     [HttpPost("{id:long}/status")]
-    [Authorize(Roles = UserClaimsExtensions.AdminRole)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]

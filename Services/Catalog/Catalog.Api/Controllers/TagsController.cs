@@ -1,25 +1,23 @@
 using Catalog.Bll.Dto;
 using Catalog.Bll.Services;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Authorization;
+using Platform.ServiceDefaults;
 
 namespace Catalog.Api.Controllers;
 
 [Route("api/tags")]
-[Authorize(Roles = "Admin")]
 [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
 [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
 public class TagsController(ITagService service) : ApiControllerBase
 {
     [HttpGet]
-    [AllowAnonymous]
-    [Authorize(Policy = "products.read")]
+    [RequirePermission(Permissions.ProductsRead)]
     public async Task<ActionResult<IReadOnlyList<TagDto>>> GetAll(CancellationToken ct)
         => Ok(await service.GetAllAsync(ct));
 
     [HttpPost]
+    [RequirePermission(Permissions.ProductsCreate)]
     [ProducesResponseType(typeof(TagDto), StatusCodes.Status201Created)]
-    [Authorize(Policy = "products.write")]
     public async Task<ActionResult<TagDto>> Create(CreateTagDto input, CancellationToken ct)
     {
         var created = await service.CreateAsync(input, ct);
@@ -27,8 +25,7 @@ public class TagsController(ITagService service) : ApiControllerBase
     }
 
     [HttpGet("{id:long}/menu-items")]
-    [AllowAnonymous]
-    [Authorize(Policy = "products.read")]
+    [RequirePermission(Permissions.ProductsRead)]
     public async Task<ActionResult<IReadOnlyList<TagMenuItemDto>>> GetMenuItems(
         long id, [FromQuery] DateTime? since, CancellationToken ct)
         => Ok(await service.GetMenuItemsAsync(id, since, ct));

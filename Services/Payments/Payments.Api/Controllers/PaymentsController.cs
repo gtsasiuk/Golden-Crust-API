@@ -1,19 +1,17 @@
-
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Payments.Api.Models;
 using Payments.Api.Services;
+using Platform.ServiceDefaults;
 
 namespace Payments.Api.Controllers;
 
 [ApiController]
 [Route("payments")]
-[Authorize]
-public class PaymentsController(
-    PaymentStore store) : ControllerBase
+public class PaymentsController(PaymentStore store) : ControllerBase
 {
     // GET /payments
     [HttpGet]
+    [RequirePermission(Permissions.PaymentsRead)]
     [ProducesResponseType(
         typeof(IReadOnlyList<PaymentDto>),
         StatusCodes.Status200OK)]
@@ -24,6 +22,7 @@ public class PaymentsController(
 
     // POST /payments/process
     [HttpPost("process")]
+    [RequirePermission(Permissions.PaymentsProcess)]
     [ProducesResponseType(
         typeof(PaymentDto),
         StatusCodes.Status201Created)]
@@ -51,6 +50,7 @@ public class PaymentsController(
 
     // POST /payments/refund
     [HttpPost("refund")]
+    [RequirePermission(Permissions.PaymentsRefund)]
     [ProducesResponseType(
         typeof(PaymentDto),
         StatusCodes.Status200OK)]

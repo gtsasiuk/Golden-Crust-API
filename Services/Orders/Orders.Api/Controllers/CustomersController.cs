@@ -1,5 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Orders.Api.Security;
 using Orders.Bll.Dtos;
 using Orders.Bll.Services;
@@ -9,7 +8,6 @@ namespace Orders.Api.Controllers;
 
 [ApiController]
 [Route("api/customers")]
-[Authorize]
 [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
 [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
 [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]

@@ -2,17 +2,16 @@ using Microsoft.AspNetCore.Mvc;
 using Platform.Aggregator.Caching;
 using Platform.Aggregator.Models;
 using Platform.Aggregator.Services;
-using Microsoft.AspNetCore.Authorization;
 using Platform.ServiceDefaults;
 
 namespace Platform.Aggregator.Controllers;
 
 [ApiController]
 [Route("api/aggregator")]
-[Authorize(Roles = UserClaimsExtensions.AdminRole)]
 public class AggregatorController(CachedOrderAggregationService service, ILogger<AggregatorController> logger) : ControllerBase
 {
     [HttpGet("orders/{id:long}/full")]
+    [RequirePermission(Permissions.AggregatorRead)]
     [ProducesResponseType<FullOrderDto>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status503ServiceUnavailable)]
@@ -33,6 +32,7 @@ public class AggregatorController(CachedOrderAggregationService service, ILogger
     }
 
     [HttpGet("status")]
+    [RequirePermission(Permissions.AggregatorRead)]
     [ProducesResponseType<IReadOnlyList<DownstreamStatus>>(StatusCodes.Status200OK)]
     public async Task<ActionResult<IReadOnlyList<DownstreamStatus>>> GetStatus(
     [FromServices] DownstreamStatusService status, CancellationToken ct)
