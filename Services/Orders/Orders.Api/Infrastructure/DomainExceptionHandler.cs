@@ -17,6 +17,7 @@ public sealed class DomainExceptionHandler(
         {
             NotFoundException => (StatusCodes.Status404NotFound, "Resource not found"),
             BusinessConflictException => (StatusCodes.Status409Conflict, "Business rule conflict"),
+            ForbiddenException => (StatusCodes.Status403Forbidden, "Access denied"),
             ValidationException => (StatusCodes.Status400BadRequest, "Validation failed"),
             _ => (StatusCodes.Status500InternalServerError, "Unexpected error")
         };

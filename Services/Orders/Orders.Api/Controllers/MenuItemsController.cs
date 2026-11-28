@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Orders.Bll.Dtos;
 using Orders.Bll.Services;
+using Platform.ServiceDefaults;
 
 namespace Orders.Api.Controllers;
 
@@ -10,10 +11,12 @@ namespace Orders.Api.Controllers;
 public class MenuItemsController(IMenuService menu) : ControllerBase
 {
     [HttpGet]
+    [RequirePermission(Permissions.OrdersRead)]
     public async Task<ActionResult<IReadOnlyList<MenuItemDto>>> GetAll(CancellationToken ct)
         => Ok(await menu.GetAllAsync(ct));
 
     [HttpGet("{id:long}")]
+    [RequirePermission(Permissions.OrdersRead)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<MenuItemDto>> GetById(long id, CancellationToken ct)
         => Ok(await menu.GetByIdAsync(id, ct));

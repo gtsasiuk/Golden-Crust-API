@@ -1,0 +1,10 @@
+encryptionsalt: v1:TEtSELxhJTo=:v1:Jx7U6mK7Kl70yo5g:7VPRlTmZo1Oqez7bp5Gwe/b4zzdSNQ==
+config:
+  keycloak:url: https://localhost:8080
+  keycloak:clientId: admin-cli
+  keycloak:username: admin
+  keycloak:password:
+    secure: v1:kSY3slF4m6hlkeOk:kL5qw1K61QO1/2gxePTI2m0YLvcQJcCUignZ0GVkD164ZEPlxdw=
+  goldencrust:testUserPassword:
+    secure: v1:kcpKG0WzG+bNfUXj:OqOiKs1f7JILWzxJXJ0bUlEY6ZnOrKeO
+  goldencrust:temporaryPasswords: "false"

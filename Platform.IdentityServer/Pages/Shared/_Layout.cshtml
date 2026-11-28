@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@ViewData["Title"] · Golden Crust Identity</title>
+    <style>
+        :root {
+            color-scheme: light dark;
+        }
+
+        body {
+            font-family: system-ui, sans-serif;
+            max-width: 26rem;
+            margin: 4rem auto;
+            padding: 0 1rem;
+            line-height: 1.5;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+        }
+
+        label {
+            display: block;
+            margin-top: 1rem;
+            font-weight: 600;
+        }
+
+        input {
+            width: 100%;
+            padding: .55rem;
+            margin-top: .25rem;
+            box-sizing: border-box;
+        }
+
+        button {
+            margin-top: 1.25rem;
+            padding: .6rem 1.2rem;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+
+        .error {
+            color: #b3261e;
+            margin: 1rem 0;
+        }
+
+        .muted {
+            opacity: .7;
+        }
+
+        header {
+            font-weight: 700;
+            margin-bottom: 2rem;
+        }
+    </style>
+</head>
+<body>
+    <header>🥖 Golden Crust · Identity</header>
+    @RenderBody()
+</body>
+</html>

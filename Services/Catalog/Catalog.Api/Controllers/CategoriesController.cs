@@ -1,6 +1,7 @@
 using Catalog.Bll.Dto;
 using Catalog.Bll.Services;
 using Microsoft.AspNetCore.Mvc;
+using Platform.ServiceDefaults;
 
 namespace Catalog.Api.Controllers;
 
@@ -10,14 +11,17 @@ namespace Catalog.Api.Controllers;
 public class CategoriesController(ICategoryService service) : ApiControllerBase
 {
     [HttpGet]
+    [RequirePermission(Permissions.ProductsRead)]
     public async Task<ActionResult<IReadOnlyList<CategoryDto>>> GetAll(CancellationToken ct)
         => Ok(await service.GetAllAsync(ct));
 
     [HttpGet("{id:long}")]
+    [RequirePermission(Permissions.ProductsRead)]
     public async Task<ActionResult<CategoryWithItemsDto>> GetById(long id, CancellationToken ct)
         => Ok(await service.GetByIdAsync(id, ct));
 
     [HttpPost]
+    [RequirePermission(Permissions.ProductsCreate)]
     [ProducesResponseType(typeof(CategoryDto), StatusCodes.Status201Created)]
     public async Task<ActionResult<CategoryDto>> Create(CreateCategoryDto input, CancellationToken ct)
     {
@@ -27,6 +31,7 @@ public class CategoriesController(ICategoryService service) : ApiControllerBase
     }
 
     [HttpPut("{id:long}")]
+    [RequirePermission(Permissions.ProductsUpdate)]
     public async Task<ActionResult<CategoryDto>> Update(long id, UpdateCategoryDto input, CancellationToken ct)
     {
         if (await ValidateAsync(input, ct) is { } invalid) return invalid;
@@ -34,6 +39,7 @@ public class CategoriesController(ICategoryService service) : ApiControllerBase
     }
 
     [HttpDelete("{id:long}")]
+    [RequirePermission(Permissions.ProductsDelete)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Delete(long id, CancellationToken ct)
     {

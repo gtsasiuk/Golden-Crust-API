@@ -1,6 +1,7 @@
 using Catalog.Bll.Dto;
 using Catalog.Bll.Services;
 using Microsoft.AspNetCore.Mvc;
+using Platform.ServiceDefaults;
 
 namespace Catalog.Api.Controllers;
 
@@ -10,6 +11,7 @@ namespace Catalog.Api.Controllers;
 public class MenuItemsController(IMenuItemService service) : ApiControllerBase
 {
     [HttpGet]
+    [RequirePermission(Permissions.ProductsRead)]
     public async Task<ActionResult<PagedResult<MenuItemListDto>>> GetList(
         [FromQuery] MenuItemsQuery query, CancellationToken ct)
     {
@@ -20,10 +22,12 @@ public class MenuItemsController(IMenuItemService service) : ApiControllerBase
     }
 
     [HttpGet("{id:long}")]
+    [RequirePermission(Permissions.ProductsRead)]
     public async Task<ActionResult<MenuItemDto>> GetById(long id, CancellationToken ct)
         => Ok(await service.GetByIdAsync(id, ct));
 
     [HttpPost]
+    [RequirePermission(Permissions.ProductsCreate)]
     [ProducesResponseType(typeof(MenuItemDto), StatusCodes.Status201Created)]
     public async Task<ActionResult<MenuItemDto>> Create(CreateMenuItemDto input, CancellationToken ct)
     {
@@ -33,6 +37,7 @@ public class MenuItemsController(IMenuItemService service) : ApiControllerBase
     }
 
     [HttpPut("{id:long}")]
+    [RequirePermission(Permissions.ProductsUpdate)]
     public async Task<ActionResult<MenuItemDto>> Update(long id, UpdateMenuItemDto input, CancellationToken ct)
     {
         if (await ValidateAsync(input, ct) is { } invalid) return invalid;
@@ -40,6 +45,7 @@ public class MenuItemsController(IMenuItemService service) : ApiControllerBase
     }
 
     [HttpPatch("{id:long}/price")]
+    [RequirePermission(Permissions.ProductsUpdate)]
     public async Task<ActionResult<MenuItemDto>> ChangePrice(long id, ChangePriceDto input, CancellationToken ct)
     {
         if (await ValidateAsync(input, ct) is { } invalid) return invalid;
@@ -47,10 +53,12 @@ public class MenuItemsController(IMenuItemService service) : ApiControllerBase
     }
 
     [HttpPatch("{id:long}/availability")]
+    [RequirePermission(Permissions.ProductsPublish)]
     public async Task<ActionResult<MenuItemDto>> SetAvailability(long id, SetAvailabilityDto input, CancellationToken ct)
         => Ok(await service.SetAvailabilityAsync(id, input, ct));
 
     [HttpDelete("{id:long}")]
+    [RequirePermission(Permissions.ProductsDelete)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Delete(long id, CancellationToken ct)
     {
@@ -59,6 +67,7 @@ public class MenuItemsController(IMenuItemService service) : ApiControllerBase
     }
 
     [HttpPut("{id:long}/details")]
+    [RequirePermission(Permissions.ProductsUpdate)]
     public async Task<ActionResult<MenuItemDto>> SetDetails(long id, UpdateDetailsDto input, CancellationToken ct)
     {
         if (await ValidateAsync(input, ct) is { } invalid) return invalid;
@@ -66,6 +75,7 @@ public class MenuItemsController(IMenuItemService service) : ApiControllerBase
     }
 
     [HttpPost("{id:long}/images")]
+    [RequirePermission(Permissions.ProductsUpdate)]
     [ProducesResponseType(typeof(ImageDto), StatusCodes.Status201Created)]
     public async Task<ActionResult<ImageDto>> AddImage(long id, AddImageDto input, CancellationToken ct)
     {
@@ -75,6 +85,7 @@ public class MenuItemsController(IMenuItemService service) : ApiControllerBase
     }
 
     [HttpPut("{id:long}/images/{imageId:long}/primary")]
+    [RequirePermission(Permissions.ProductsUpdate)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> SetPrimaryImage(long id, long imageId, CancellationToken ct)
     {
@@ -83,6 +94,7 @@ public class MenuItemsController(IMenuItemService service) : ApiControllerBase
     }
 
     [HttpDelete("{id:long}/images/{imageId:long}")]
+    [RequirePermission(Permissions.ProductsUpdate)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> RemoveImage(long id, long imageId, CancellationToken ct)
     {
@@ -91,10 +103,12 @@ public class MenuItemsController(IMenuItemService service) : ApiControllerBase
     }
 
     [HttpPost("{id:long}/tags/{tagId:long}")]
+    [RequirePermission(Permissions.ProductsUpdate)]
     public async Task<ActionResult<MenuItemDto>> AddTag(long id, long tagId, CancellationToken ct)
         => Ok(await service.AddTagAsync(id, tagId, ct));
 
     [HttpDelete("{id:long}/tags/{tagId:long}")]
+    [RequirePermission(Permissions.ProductsUpdate)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> RemoveTag(long id, long tagId, CancellationToken ct)
     {

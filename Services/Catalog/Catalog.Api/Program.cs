@@ -10,6 +10,9 @@ using Microsoft.EntityFrameworkCore;
 using Platform.ServiceDefaults;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Platform.EventBus.DependencyInjection;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using Platform.ServiceDefaults.Security;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -70,6 +73,34 @@ builder.Services.AddProblemDetails(o => o.CustomizeProblemDetails = ctx =>
     ctx.ProblemDetails.Extensions["traceId"] = ctx.HttpContext.TraceIdentifier);
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 
+builder.Services.AddLocalAndIdentityServerJwt(
+    builder.Configuration,
+    "products_api",
+    "products.read",
+    "products.write");
+
+builder.Services.AddAuthentication()
+    .AddKeycloakJwtBearer(
+        serviceName: "keycloak",
+        realm: "DevRealmDrivers",
+        authenticationScheme: "Keycloak",
+        configureOptions: options =>
+        {
+            options.Audience = "products-api";
+
+            if (builder.Environment.IsDevelopment())
+                options.RequireHttpsMetadata = false;
+
+            options.Events = new JwtBearerEvents
+            {
+                OnTokenValidated = KeycloakRoleClaims.MapRealmRolesAsync
+            };
+        });
+
+builder.Services.AcceptKeycloakTokens();
+builder.Services.AddAuthorization();
+builder.Services.AddPermissionAuthorization();
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
@@ -96,6 +127,9 @@ using (var scope = app.Services.CreateScope())
     if (!app.Environment.IsProduction())
         await DbInitializer.SeedAsync(db);
 }
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapControllers();
 app.MapGrpcService<CatalogGrpcService>();

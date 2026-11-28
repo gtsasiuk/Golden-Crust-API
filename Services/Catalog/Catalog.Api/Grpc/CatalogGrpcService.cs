@@ -4,9 +4,11 @@ using Catalog.Bll.Services;
 using Catalog.Contracts;
 using Catalog.Domain.Exceptions;
 using Grpc.Core;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Catalog.Api.GrpcServices;
 
+[Authorize(Policy = "products.read")]
 public class CatalogGrpcService(IMenuItemService menu) : CatalogService.CatalogServiceBase
 {
     private const int MaxBatchSize = 100;

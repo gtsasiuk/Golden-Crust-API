@@ -13,6 +13,7 @@ using Reviews.WebApi.Metrics;
 using Reviews.WebApi.IntegrationEvents;
 using Platform.ServiceDefaults;
 using Platform.EventBus.DependencyInjection;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -74,6 +75,15 @@ builder.Services.AddProblemDetails(o => o.CustomizeProblemDetails = ctx =>
     ctx.ProblemDetails.Extensions["traceId"] = ctx.HttpContext.TraceIdentifier);
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 
+builder.Services.AddLocalAndIdentityServerJwt(
+    builder.Configuration,
+    "reviews_api",
+    "reviews.read",
+    "reviews.write");
+
+builder.Services.AddAuthorization();
+builder.Services.AddPermissionAuthorization();
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
@@ -92,6 +102,9 @@ if (app.Environment.IsDevelopment())
     mapScope.ServiceProvider.GetRequiredService<AutoMapper.IMapper>()
             .ConfigurationProvider.AssertConfigurationIsValid();
 }
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapControllers();
 app.MapGrpcService<ReviewsGrpcService>();

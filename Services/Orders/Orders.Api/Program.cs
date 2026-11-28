@@ -1,5 +1,6 @@
 using Orders.Api.Infrastructure;
 using Orders.Api.GrpcServices;
+using Orders.Api.Security;
 using Orders.Bll.Mapping;
 using Orders.Bll.Services;
 using Orders.Dal;
@@ -11,6 +12,9 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Platform.EventBus.DependencyInjection;
 using Orders.Api.IntegrationEvents;
 using Orders.Bll.IntegrationEvents.Handlers;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using Platform.ServiceDefaults.Security;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -34,6 +38,7 @@ builder.Services.AddScoped<IUnitOfWork>(_ => new UnitOfWork(connectionString));
 builder.Services.AddScoped<ICustomerService, CustomerService>();
 builder.Services.AddScoped<IMenuService, MenuService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
+builder.Services.AddScoped<IAccessGuard, AccessGuard>();
 
 // Обробники integration events
 builder.Services.AddScoped<MenuItemPriceChangedHandler>();
@@ -58,6 +63,36 @@ builder.Services.AddProblemDetails(o => o.CustomizeProblemDetails = ctx =>
     ctx.ProblemDetails.Extensions["traceId"] = ctx.HttpContext.TraceIdentifier);
 builder.Services.AddExceptionHandler<DomainExceptionHandler>();
 
+builder.Services.AddLocalAndIdentityServerJwt(
+    builder.Configuration,
+    "orders_api",
+    "orders.read",
+    "orders.write");
+
+
+builder.Services.AddAuthentication()
+    .AddKeycloakJwtBearer(
+        serviceName: "keycloak",
+        realm: "DevRealmDrivers",
+        authenticationScheme: "Keycloak",
+        configureOptions: options =>
+        {
+            options.Audience = "orders-api";
+
+            if (builder.Environment.IsDevelopment())
+                options.RequireHttpsMetadata = false;
+
+            options.Events = new JwtBearerEvents
+            {
+                OnTokenValidated =
+                    KeycloakRoleClaims.MapRealmRolesAsync
+            };
+        });
+
+builder.Services.AcceptKeycloakTokens();
+builder.Services.AddAuthorization();
+builder.Services.AddPermissionAuthorization();
+
 builder.Services.AddSingleton<OrdersSnapshot>();
 builder.Services.AddSingleton<IOrderMetrics, OrderMetrics>();
 builder.Services.AddHostedService<OrdersSnapshotRefresher>();
@@ -80,6 +115,9 @@ if (app.Environment.IsDevelopment())
     scope.ServiceProvider.GetRequiredService<AutoMapper.IMapper>()
          .ConfigurationProvider.AssertConfigurationIsValid();
 }
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapControllers();
 app.MapGrpcService<OrdersGrpcService>();
