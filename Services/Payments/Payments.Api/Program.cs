@@ -1,18 +1,18 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Payments.Api.Services;
 using Platform.ServiceDefaults;
+using Platform.ServiceDefaults.Security;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 
-// Keycloak authentication
-builder.Services
-    .AddAuthentication(options =>
-    {
-        options.DefaultAuthenticateScheme = "Keycloak";
-        options.DefaultChallengeScheme = "Keycloak";
-    })
+builder.Services.AddLocalAndIdentityServerJwt(
+    builder.Configuration,
+    "payments_api",
+    "payments.read");
+
+builder.Services.AddAuthentication()
     .AddKeycloakJwtBearer(
         serviceName: "keycloak",
         realm: "DevRealmDrivers",
@@ -23,9 +23,17 @@ builder.Services
 
             if (builder.Environment.IsDevelopment())
                 options.RequireHttpsMetadata = false;
+
+            options.Events = new JwtBearerEvents
+            {
+                OnTokenValidated = KeycloakRoleClaims.MapRealmRolesAsync
+            };
         });
 
+builder.Services.AcceptKeycloakTokens();
+
 builder.Services.AddAuthorization();
+builder.Services.AddPermissionAuthorization();
 
 // Payment storage
 builder.Services.AddSingleton<PaymentStore>();

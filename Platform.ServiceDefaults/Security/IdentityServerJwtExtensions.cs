@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.Extensions.Options;
 
 namespace Platform.ServiceDefaults;
 
@@ -64,12 +65,14 @@ public static class IdentityServerJwtExtensions
 
                             var tokenIssuer = handler.ReadJwtToken(token).Issuer;
 
-                            return string.Equals(
-                                tokenIssuer,
-                                issuer,
-                                StringComparison.OrdinalIgnoreCase)
-                                ? IdentityServerScheme
-                                : LocalScheme;
+                            if (string.Equals(tokenIssuer, issuer, StringComparison.OrdinalIgnoreCase))
+                                return IdentityServerScheme;
+
+                            if (tokenIssuer.Contains("/realms/", StringComparison.OrdinalIgnoreCase)
+                                && context.RequestServices.GetService<IOptions<PlatformAuthOptions>>()?.Value.AcceptKeycloak == true)
+                                return KeycloakScheme;
+
+                            return LocalScheme;
                         }
                         catch
                         {
@@ -125,4 +128,15 @@ public static class IdentityServerJwtExtensions
 
         return services;
     }
+
+    private const string KeycloakScheme = "Keycloak";
+
+    public sealed class PlatformAuthOptions
+    {
+        public bool AcceptKeycloak { get; set; }
+    }
+
+    // Викликати лише там, де зареєстровано AddKeycloakJwtBearer("Keycloak")
+    public static IServiceCollection AcceptKeycloakTokens(this IServiceCollection services)
+        => services.Configure<PlatformAuthOptions>(o => o.AcceptKeycloak = true);
 }

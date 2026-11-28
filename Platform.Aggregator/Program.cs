@@ -43,6 +43,7 @@ builder.Services
     });
 
 builder.Services.AddAuthorization();
+builder.Services.AddPermissionAuthorization();
 
 builder.Services.AddGrpcClient<Health.HealthClient>(
     "orders-health",

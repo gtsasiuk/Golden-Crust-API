@@ -89,8 +89,9 @@ builder.Services.AddAuthentication()
             };
         });
 
-
+builder.Services.AcceptKeycloakTokens();
 builder.Services.AddAuthorization();
+builder.Services.AddPermissionAuthorization();
 
 builder.Services.AddSingleton<OrdersSnapshot>();
 builder.Services.AddSingleton<IOrderMetrics, OrderMetrics>();

@@ -82,6 +82,7 @@ builder.Services.AddLocalAndIdentityServerJwt(
     "reviews.write");
 
 builder.Services.AddAuthorization();
+builder.Services.AddPermissionAuthorization();
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();

@@ -17,7 +17,7 @@ public class OrdersController(IOrderService orders, IAccessGuard guard, IWebHost
 {
     [HttpGet("{id:long}")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
-    [Authorize(Policy = "orders.read")]
+    [RequirePermission(Permissions.OrdersRead)]
     public async Task<ActionResult<OrderDto>> GetById(long id, CancellationToken ct)
     {
         await guard.EnsureOrderAccessAsync(User, id, ct);
@@ -27,7 +27,7 @@ public class OrdersController(IOrderService orders, IAccessGuard guard, IWebHost
     [HttpPost]
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]   // клієнта не існує
-    [Authorize(Policy = "orders.write")]
+    [RequirePermission(Permissions.OrdersCreate)]
     public async Task<ActionResult<OrderDto>> Create(CreateOrderDto input, CancellationToken ct)
     {
         // Замовлення можна створити лише на власного клієнта (Admin: на будь-якого)
@@ -40,7 +40,7 @@ public class OrdersController(IOrderService orders, IAccessGuard guard, IWebHost
     // Абсолютний шлях: ресурс належить клієнту, але відповідь це замовлення
     [HttpGet("/api/customers/{customerId:long}/orders")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
-    [Authorize(Policy = "orders.read")]
+    [RequirePermission(Permissions.OrdersRead)]
     public async Task<ActionResult<IReadOnlyList<OrderSummaryDto>>> GetByCustomer(
         long customerId, [FromQuery] string? status, CancellationToken ct,
         [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
@@ -54,7 +54,7 @@ public class OrdersController(IOrderService orders, IAccessGuard guard, IWebHost
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
-    [Authorize(Policy = "orders.write")]
+    [RequirePermission(Permissions.OrdersUpdate)]
     public async Task<IActionResult> Checkout(long id, CancellationToken ct, [FromQuery] bool simulateFailure = false)
     {
         await guard.EnsureOrderAccessAsync(User, id, ct);
@@ -70,7 +70,7 @@ public class OrdersController(IOrderService orders, IAccessGuard guard, IWebHost
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
-    [Authorize(Policy = "orders.write")]
+    [RequirePermission(Permissions.OrdersApprove)]
     public async Task<IActionResult> ChangeStatus(long id, ChangeOrderStatusDto input, CancellationToken ct)
     {
         await orders.ChangeStatusAsync(id, input, ct);
@@ -81,7 +81,7 @@ public class OrdersController(IOrderService orders, IAccessGuard guard, IWebHost
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
-    [Authorize(Policy = "orders.write")]
+    [RequirePermission(Permissions.OrdersDelete)]
     public async Task<IActionResult> Cancel(long id, CancellationToken ct, [FromQuery] string? reason = null)
     {
         await guard.EnsureOrderAccessAsync(User, id, ct);

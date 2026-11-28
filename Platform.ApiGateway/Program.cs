@@ -26,6 +26,8 @@ builder.Services.AddAuthentication()
             options.TokenValidationParameters.ValidateAudience = false;
         });
 
+builder.Services.AcceptKeycloakTokens();
+
 builder.Services.AddAuthorization(options =>
     options.AddPolicy("authenticated", policy => policy.RequireAuthenticatedUser()));
 

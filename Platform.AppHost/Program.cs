@@ -119,6 +119,11 @@ var reviews = builder.AddProject<Projects.Reviews_WebApi>("reviews-api")
 var payments = builder.AddProject<Projects.Payments_Api>("payments-api")
     .WithReference(keycloak)
     .WaitFor(keycloak)
+    .WithReference(identityServer)
+    .WaitFor(identityServer)
+    .WithEnvironment("IdentityServer__Authority", identityServer.GetEndpoint("public"))
+    .WithEnvironment("IdentityServer__Issuer", "http://localhost:5100")
+    .WithJwtSettings(jwtSecret)
     .WithHttpHealthCheck("/health");
 
 // Aggregator

@@ -97,8 +97,9 @@ builder.Services.AddAuthentication()
             };
         });
 
-
+builder.Services.AcceptKeycloakTokens();
 builder.Services.AddAuthorization();
+builder.Services.AddPermissionAuthorization();
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
