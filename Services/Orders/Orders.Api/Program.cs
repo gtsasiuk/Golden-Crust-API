@@ -13,6 +13,8 @@ using Platform.EventBus.DependencyInjection;
 using Orders.Api.IntegrationEvents;
 using Orders.Bll.IntegrationEvents.Handlers;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using Platform.ServiceDefaults.Security;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -66,6 +68,27 @@ builder.Services.AddLocalAndIdentityServerJwt(
     "orders_api",
     "orders.read",
     "orders.write");
+
+
+builder.Services.AddAuthentication()
+    .AddKeycloakJwtBearer(
+        serviceName: "keycloak",
+        realm: "DevRealmDrivers",
+        authenticationScheme: "Keycloak",
+        configureOptions: options =>
+        {
+            options.Audience = "orders-api";
+
+            if (builder.Environment.IsDevelopment())
+                options.RequireHttpsMetadata = false;
+
+            options.Events = new JwtBearerEvents
+            {
+                OnTokenValidated =
+                    KeycloakRoleClaims.MapRealmRolesAsync
+            };
+        });
+
 
 builder.Services.AddAuthorization();
 

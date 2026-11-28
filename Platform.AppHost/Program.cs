@@ -34,6 +34,10 @@ var reviewsDb = mongo.AddDatabase("ReviewsDb", "golden_crust_reviews");
 var redis = builder.AddRedis("redis")
     .WithDataVolume();
 
+// Keycloak Identity Provider
+var keycloak = builder.AddKeycloak("keycloak", 8080)
+    .WithDataVolume();
+
 // RabbitMQ
 var messaging = builder.AddRabbitMQ("messaging")
     .WithDataVolume()
@@ -72,6 +76,8 @@ var orders = builder.AddProject<Projects.Orders_Api>("orders-api")
     .WaitFor(ordersDb)
     .WithReference(messaging)
     .WaitFor(messaging)
+    .WithReference(keycloak)
+    .WaitFor(keycloak)
     .WithReference(identityServer)
     .WaitFor(identityServer)
     .WithEnvironment("IdentityServer__Authority", identityServer.GetEndpoint("public"))
@@ -86,6 +92,8 @@ var catalog = builder.AddProject<Projects.Catalog_Api>("catalog-api")
     .WithReference(redis)
     .WithReference(messaging)
     .WaitFor(messaging)
+    .WithReference(keycloak)
+    .WaitFor(keycloak)
     .WithReference(identityServer)
     .WaitFor(identityServer)
     .WithEnvironment( "IdentityServer__Authority", identityServer.GetEndpoint("public"))
@@ -105,6 +113,12 @@ var reviews = builder.AddProject<Projects.Reviews_WebApi>("reviews-api")
     .WithEnvironment("IdentityServer__Authority", identityServer.GetEndpoint("public"))
     .WithEnvironment("IdentityServer__Issuer", "http://localhost:5100")
     .WithJwtSettings(jwtSecret)
+    .WithHttpHealthCheck("/health");
+
+// Payments API
+var payments = builder.AddProject<Projects.Payments_Api>("payments-api")
+    .WithReference(keycloak)
+    .WaitFor(keycloak)
     .WithHttpHealthCheck("/health");
 
 // Aggregator
@@ -134,6 +148,14 @@ builder.AddProject<Projects.Platform_ApiGateway>("gateway")
     .WithReference(aggregator)
     .WaitFor(aggregator)
     .WithReference(auth).WaitFor(auth)
+    .WithReference(identityServer)
+    .WaitFor(identityServer)
+    .WithReference(keycloak)
+    .WaitFor(keycloak)
+    .WithReference(payments)
+    .WaitFor(payments)
+    .WithEnvironment("IdentityServer__Authority", identityServer.GetEndpoint("public"))
+    .WithEnvironment("IdentityServer__Issuer","http://localhost:5100")
     .WithJwtSettings(jwtSecret)
     .WithHttpHealthCheck("/health");
 

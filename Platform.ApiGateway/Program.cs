@@ -2,20 +2,29 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Platform.ServiceDefaults;
 using Yarp.ReverseProxy.Forwarder;
 using Yarp.ReverseProxy.Model;
+using Microsoft.AspNetCore.Authorization;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 
 // ── Автентифікація: Gateway перевіряє JWT ПЕРЕД проксіюванням ────────────────
-var jwt = builder.Configuration.GetLocalJwtSettings();
+builder.Services.AddLocalAndIdentityServerJwt(
+    builder.Configuration,
+    audience: null);
 
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        options.MapInboundClaims = false;
-        options.TokenValidationParameters = jwt.ToValidationParameters();
-    });
+builder.Services.AddAuthentication()
+    .AddKeycloakJwtBearer(
+        serviceName: "keycloak",
+        realm: "DevRealmDrivers",
+        authenticationScheme: "Keycloak",
+        configureOptions: options =>
+        {
+            // Gateway перевіряє автентичність токена.
+            // Конкретний Audience перевіряє сам мікросервіс.
+            options.RequireHttpsMetadata = false;
+            options.TokenValidationParameters.ValidateAudience = false;
+        });
 
 builder.Services.AddAuthorization(options =>
     options.AddPolicy("authenticated", policy => policy.RequireAuthenticatedUser()));

@@ -5,6 +5,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Aspire.Keycloak.Authentication" Version="13.6.1-preview.1.26506.6" />
     <PackageReference Include="Microsoft.Extensions.ServiceDiscovery.Yarp" Version="10.11.0" />
     <PackageReference Include="Yarp.ReverseProxy" Version="2.3.0" />
   </ItemGroup>
