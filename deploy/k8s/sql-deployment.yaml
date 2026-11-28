@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sql
+  labels: { app: sql }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: sql }
+  template:
+    metadata:
+      labels: { app: sql }
+    spec:
+      containers:
+      - name: sql
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        ports:
+        - containerPort: 1433
+        env:
+        - name: ACCEPT_EULA
+          value: "Y"
+        - name: MSSQL_PID
+          value: Developer
+        - name: MSSQL_SA_PASSWORD
+          valueFrom:
+            secretKeyRef: { name: sql-secrets, key: MSSQL_SA_PASSWORD }
+        resources:
+          requests: { cpu: 250m, memory: 1536Mi }
+          limits: { memory: 3Gi }
+        readinessProbe:
+          tcpSocket: { port: 1433 }
+          initialDelaySeconds: 20
+          periodSeconds: 10
+        volumeMounts:
+        - { name: data, mountPath: /var/opt/mssql }
+      volumes:
+      - name: data
+        emptyDir: {}            # дані зникають разом із подом (лише для лаби)

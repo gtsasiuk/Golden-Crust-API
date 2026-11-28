@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: messaging
+  labels: { app: messaging }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: messaging }
+  template:
+    metadata:
+      labels: { app: messaging }
+    spec:
+      containers:
+      - name: rabbitmq
+        image: rabbitmq:4-management
+        ports:
+        - { containerPort: 5672, name: amqp }
+        - { containerPort: 15672, name: management }
+        envFrom:
+        - secretRef:
+            name: messaging-secrets
+        resources:
+          requests: { cpu: 100m, memory: 256Mi }
+          limits: { memory: 768Mi }
+        readinessProbe:
+          tcpSocket: { port: 5672 }
+          initialDelaySeconds: 15
+          periodSeconds: 10

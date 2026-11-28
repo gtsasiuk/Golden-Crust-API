@@ -1,0 +1,44 @@
+# Відкриті налаштування (без паролів). Секрети — у deploy/k8s/README.md (kubectl create secret).
+# Подвійне підкреслення "__" = двокрапка в конфігурації .NET:
+#   services__catalog-api__http__0  ->  services:catalog-api:http:0
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gateway-config
+data:
+  ASPNETCORE_ENVIRONMENT: "Production"
+  # адреси сервісів для service discovery (DNS-імена Kubernetes Service)
+  services__catalog-api__http__0: "http://catalog-api"
+  services__auth-api__http__0: "http://auth-api"
+  # Keycloak/IdentityServer у ручному деплої не розгортаємо: значення потрібні,
+  # щоб конфігурація пройшла валідацію при старті (перевіряються лише при відповідних токенах)
+  services__keycloak__http__0: "http://keycloak:8080"
+  IdentityServer__Authority: "http://identityserver:5100"
+  IdentityServer__Issuer: "http://localhost:5100"
+  Jwt__Issuer: "GoldenCrust.Auth"
+  Jwt__Audience: "GoldenCrust.Api"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: catalog-config
+data:
+  # Staging: міграції + seed працюють (у Production seed вимкнено), Swagger вимкнено
+  ASPNETCORE_ENVIRONMENT: "Staging"
+  ConnectionStrings__redis: "redis:6379"
+  services__keycloak__http__0: "http://keycloak:8080"
+  IdentityServer__Authority: "http://identityserver:5100"
+  IdentityServer__Issuer: "http://localhost:5100"
+  Jwt__Issuer: "GoldenCrust.Auth"
+  Jwt__Audience: "GoldenCrust.Api"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: auth-config
+data:
+  ASPNETCORE_ENVIRONMENT: "Production"
+  Jwt__Issuer: "GoldenCrust.Auth"
+  Jwt__Audience: "GoldenCrust.Api"
+  SeedAdmin__UserName: "admin"
+  SeedAdmin__Email: "admin@goldencrust.local"

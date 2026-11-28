@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-api
+  labels: { app: auth-api }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: auth-api }
+  template:
+    metadata:
+      labels: { app: auth-api }
+    spec:
+      containers:
+      - name: auth-api
+        image: auth-api:v1
+        imagePullPolicy: IfNotPresent          # локальний образ з Docker Desktop
+        ports:
+        - containerPort: 8080
+        envFrom:
+        - configMapRef:
+            name: auth-config
+        - secretRef:
+            name: auth-secrets
+        resources:
+          requests: { cpu: 100m, memory: 192Mi }
+          limits: { memory: 512Mi }
+        livenessProbe:                         # збій -> перезапуск контейнера
+          httpGet: { path: /health/live, port: 8080 }
+          initialDelaySeconds: 20
+          periodSeconds: 10
+        readinessProbe:                        # збій -> под виключається з Service
+          httpGet: { path: /health/ready, port: 8080 }
+          initialDelaySeconds: 10
+          periodSeconds: 10
