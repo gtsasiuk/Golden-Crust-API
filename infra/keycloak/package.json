@@ -1,0 +1,12 @@
+{
+    "name": "keycloak",
+    "main": "index.ts",
+    "devDependencies": {
+        "@types/node": "^18",
+        "typescript": "^5.0.0"
+    },
+    "dependencies": {
+        "@pulumi/keycloak": "^6.15.0",
+        "@pulumi/pulumi": "^3.113.0"
+    }
+}
